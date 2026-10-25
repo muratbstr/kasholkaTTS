@@ -1,8 +1,7 @@
 # kasholkaTTS
 
 Локальная, бесплатная open-source читалка текста для **macOS Monterey 12 и новее**, на Intel и Apple Silicon.
-Использует системные голоса, интерфейс на русском. Текст не отправляется по сети,
-доступ к микрофону не нужен.
+Использует системные голоса, интерфейс на русском.
 
 - **Основная версия — 1.5.0 Release 1:** зелёная иконка.
 - **[kasholkaTTS Beta — 1.5.1 Beta 1](beta/README.md):** синяя иконка, дополнительные
@@ -12,8 +11,6 @@
 
 Установщики: [1.5.0 Release 1](https://github.com/muratbstr/kasholkaTTS/releases/tag/v1.5.0)
 и [1.5.1 Beta 1](https://github.com/muratbstr/kasholkaTTS/releases/tag/v1.5.1-beta.1).
-Старые сборки с контрольными суммами — в [beforerel](beforerel/),
-полная прежняя история — в [changelog_before_rel.md](changelog_before_rel.md).
 
 ## Установка и обновление
 
@@ -117,10 +114,10 @@ Mac-проверки на Windows пропускаются.
 - [beta/README.md](beta/README.md) — устройство Beta, эксперименты и источники исследования Siri.
 - [assets/README.md](assets/README.md) — происхождение и сборка иконки, видео и фона.
 
-ДО ПЕРВОГО ПУБЛИЧНОГО РЕЛИЗА:
+**ДО ПЕРВОГО ПУБЛИЧНОГО РЕЛИЗА:**
 - [changelog_before_rel.md](changelog_before_rel.md) — описание изменений старых версий
 - [beforerel](beforerel) — старые версии
 
 ## Авторы
-**Код, помощь с дизайном:**  GPT-6 Astra (VS CODE + Codex)
-**Идея, промпт, дизайн:** strch
+- **Код, помощь с дизайном:**  GPT-6 Astra (VS Code + Codex)
+- **Идея, промпт, дизайн:** strch
