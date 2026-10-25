@@ -124,6 +124,7 @@ Mac-проверки на Windows пропускаются.
 
 ## Лицензия/License
 - **MIT**
+
   Делайте что хотите на основе этого проекта, но не безобразничайте :)
 
   Do whatever you like with this project, but don’t go over the top :)
