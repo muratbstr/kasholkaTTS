@@ -121,3 +121,8 @@ Mac-проверки на Windows пропускаются.
 ## Авторы
 - **Код, помощь с дизайном:**  GPT-6 Astra (VS Code + Codex)
 - **Идея, промпт, дизайн:** strch
+
+## Лицензия/License
+- **MIT**
+  Делайте что хотите на основе этого проекта, но не безобразничайте :)
+  Do whatever you like with this project, but don’t go over the top :)
