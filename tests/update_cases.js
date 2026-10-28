@@ -196,3 +196,17 @@ check('successful restart restores Unicode selection and removes private snapsho
     assert(ui.editor.string === 'До 😀 слово' && state.range.location === 6 && state.range.length === 5);
     assert(state.cleared === 'updateResumeDirectory' && state.removed[0] === directory);
 });
+
+
+check('dotted Release labels sort numerically and select valid automatic packages', function () {
+    assert(compareUpdateVersions('1.7.4 Release 2.10', '1.7.4 Release 2.2') > 0);
+    assert(compareUpdateVersions('1.7.4 Release 2.2', '1.7.4 Release 2') > 0);
+    assert(compareUpdateVersions('1.7.4 Release 2', '1.7.4 Release 2.2') < 0);
+    assert(compareUpdateVersions('1.7.4 Release 2.0', '1.7.4 Release 2') === 0);
+    assert(updateVersion('1.7.4 Release 2..2') === null);
+    assert(updateVersion('1.7.4 Release 2.02') === null);
+    assert(updateVersion('1.7.5 Beta 1.2') === null);
+    var r = releaseFixture('1.7.4 Release 2.2', false);
+    assert(selectUpdate([r], '1.7.4 Release 2', false).version === '1.7.4 Release 2.2');
+    assert(selectUpdate([r], '1.7.4 Release 2.2', false) === null);
+});

@@ -5,20 +5,30 @@ var UPDATE_API = 'https://api.github.com/repos/' + UPDATE_REPOSITORY + '/release
 function updateText(text) { return typeof t === 'function' ? t(text) : text; }
 
 function updateVersion(value) {
-    var match = /^(\d+)\.(\d+)\.(\d+) (Release|Beta) ([1-9]\d*)$/.exec(value);
-    return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === 'Beta' ? 0 : 1, Number(match[5])] : null;
+    var match = /^(\d+)\.(\d+)\.(\d+) (Release|Beta) ([1-9]\d*(?:\.(?:0|[1-9]\d*))*)$/.exec(value);
+    if (!match || (match[4] === 'Beta' && match[5].indexOf('.') !== -1)) return null;
+    var parts = [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === 'Beta' ? 0 : 1]
+        .concat(match[5].split('.').map(Number));
+    return parts.every(function (part) { return Number.isSafeInteger(part); }) ? parts : null;
 }
 
 function compareUpdateVersions(a, b) {
     a = updateVersion(a); b = updateVersion(b);
     if (!a || !b) throw new Error(updateText('Неизвестный формат версии.'));
-    for (var i = 0; i < a.length; i++) { if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1; }
+    for (var i = 0; i < Math.max(a.length, b.length); i++) {
+        var left = a[i] || 0, right = b[i] || 0;
+        if (left !== right) return left > right ? 1 : -1;
+    }
     return 0;
 }
 
 function updateAssetPrefix(beta) { return beta ? 'kasholkaTTS-Beta-' : 'kasholkaTTS-'; }
 function updateAppName(beta) { return beta ? 'kasholkaTTS Beta' : 'kasholkaTTS'; }
 
+// Protocol 1 intentionally keeps -macOS-installer.zip for automatic updates.
+// -macOS-manual-installer.zip is a separate asset and MUST NOT match below.
+// Older clients only understand integer Release labels and ignore dotted ones.
+// They need a manual upgrade once; no misleading compatibility alias is published.
 function selectUpdate(releases, current, beta) {
     if (!Array.isArray(releases)) throw new Error(updateText('GitHub вернул неверный список выпусков.'));
     var found = null;
@@ -28,7 +38,7 @@ function selectUpdate(releases, current, beta) {
         if (!tag || !!tag[2] !== beta) return;
         release.assets.forEach(function (asset) {
             var pattern = beta ? /^kasholkaTTS-Beta-(\d+\.\d+\.\d+)-Beta-([1-9]\d*)-macOS-installer\.zip$/ :
-                /^kasholkaTTS-(\d+\.\d+\.\d+)-Release-([1-9]\d*)-macOS-installer\.zip$/;
+                /^kasholkaTTS-(\d+\.\d+\.\d+)-Release-([1-9]\d*(?:\.(?:0|[1-9]\d*))*)-macOS-installer\.zip$/;
             var match = pattern.exec(asset.name || '');
             if (!match || match[1] !== tag[1] || (beta && match[2] !== tag[2])) return;
             var version = match[1] + (beta ? ' Beta ' : ' Release ') + match[2];

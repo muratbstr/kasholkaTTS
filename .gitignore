@@ -3,3 +3,7 @@ __pycache__/
 build/
 dist/
 .DS_Store
+
+# Private user notes; never publish
+для правок/
+исправить и добавить!.txt

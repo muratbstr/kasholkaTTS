@@ -22,7 +22,7 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive) as package:
                 self.assertIsNone(package.testzip())
                 names = package.namelist()
-                self.assertEqual(len(names), 21)
+                self.assertEqual(len(names), 22)
                 self.assertFalse(any(name.startswith("/") or ".." in name.split("/") for name in names))
                 command = next(name for name in names if name.endswith(".command"))
                 info = package.getinfo(command)

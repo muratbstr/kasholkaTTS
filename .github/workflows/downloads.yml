@@ -2,6 +2,12 @@ name: ZIP downloads
 
 on:
   workflow_dispatch:
+    inputs:
+      reset:
+        description: "Сбросить счётчик и считать только новые скачивания"
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: "37 * * * *"
   release:
@@ -31,15 +37,87 @@ jobs:
               { ...repo, per_page: 100 }
             );
 
-            let count = 0;
-            for (const release of releases) {
-              if (release.draft) continue;
-              for (const asset of release.assets) {
-                if (asset.name.toLowerCase().endsWith(".zip")) {
-                  count += asset.download_count;
+            // BEGIN MANUAL DOWNLOAD COUNTER
+            function manualDownloadAssets(releases) {
+              var assets = [];
+              releases.forEach(function (release) {
+                if (release.draft) return;
+                release.assets.forEach(function (asset) {
+                  var manual = /^kasholkaTTS-(?:\d+\.\d+\.\d+-Release-[1-9]\d*(?:\.(?:0|[1-9]\d*))*|Beta-\d+\.\d+\.\d+-Beta-[1-9]\d*)-macOS-manual-installer\.zip$/;
+                  if (asset.state === "uploaded" && manual.test(asset.name)) {
+                    if (!Number.isSafeInteger(asset.download_count) || asset.download_count < 0) throw new Error("Invalid download count");
+                    assets.push(asset);
+                  }
+                });
+              });
+              return assets;
+            }
+            function countManualDownloads(releases, baseline) {
+              var total = 0;
+              baseline = baseline || {};
+              manualDownloadAssets(releases).forEach(function (asset) {
+                var old = Object.prototype.hasOwnProperty.call(baseline, asset.id) ? baseline[asset.id] : 0;
+                if (!Number.isSafeInteger(old) || old < 0) throw new Error("Invalid baseline count");
+                total += Math.max(0, asset.download_count - old);
+                if (!Number.isSafeInteger(total)) throw new Error("Download count overflow");
+              });
+              return total;
+            }
+            function captureDownloadBaseline(releases) {
+              var baseline = {};
+              manualDownloadAssets(releases).forEach(function (asset) {
+                if (!Number.isSafeInteger(asset.id) || asset.id <= 0) throw new Error("Invalid asset ID");
+                baseline[String(asset.id)] = asset.download_count;
+              });
+              return baseline;
+            }
+            // END MANUAL DOWNLOAD COUNTER
+
+            async function readFile(filePath) {
+              try {
+                const response = await github.rest.repos.getContent({...repo, path: filePath, ref: branch});
+                const file = response.data;
+                if (file.type !== "file" || file.encoding !== "base64") throw new Error("Unexpected file format: " + filePath);
+                return {sha: file.sha, text: Buffer.from(file.content, "base64").toString("utf8")};
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            }
+            async function saveFile(filePath, text, message) {
+              for (let attempt = 0; attempt < 3; attempt++) {
+                const existing = await readFile(filePath);
+                if (existing && existing.text === text) return;
+                try {
+                  await github.rest.repos.createOrUpdateFileContents({
+                    ...repo, path: filePath, branch, message,
+                    content: Buffer.from(text, "utf8").toString("base64"),
+                    ...(existing ? {sha: existing.sha} : {})
+                  });
+                  return;
+                } catch (error) {
+                  if (error.status !== 409 || attempt === 2) throw error;
                 }
               }
             }
+            const baselinePath = "badges/downloads-baseline.json";
+            const inputs = context.payload.inputs || {};
+            const reset = context.eventName === "workflow_dispatch" && (inputs.reset === "true" || inputs.reset === true);
+            let baseline = {};
+            if (reset) {
+              baseline = captureDownloadBaseline(releases);
+              await saveFile(baselinePath, JSON.stringify({
+                schemaVersion: 1, resetAt: new Date().toISOString(), assets: baseline
+              }, null, 2) + "\n", "Reset manual download counter baseline");
+            } else {
+              const saved = await readFile(baselinePath);
+              if (saved) {
+                const data = JSON.parse(saved.text);
+                if (data.schemaVersion !== 1 || !data.assets || typeof data.assets !== "object" || Array.isArray(data.assets)) throw new Error("Invalid baseline file");
+                baseline = data.assets;
+              }
+            }
+            const count = countManualDownloads(releases, baseline);
 
             const text = JSON.stringify({
               schemaVersion: 1,
@@ -48,39 +126,5 @@ jobs:
               color: "00b000"
             }, null, 2) + "\n";
 
-            let existing;
-            try {
-              const response = await github.rest.repos.getContent({
-                ...repo, path, ref: branch
-              });
-              existing = response.data;
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-
-            if (existing) {
-              if (existing.type !== "file" ||
-                  existing.encoding !== "base64") {
-                throw new Error("Unexpected badge file format");
-              }
-
-              const previous = Buffer.from(
-                existing.content, "base64"
-              ).toString("utf8");
-
-              if (previous === text) {
-                core.info(`Downloads unchanged: ${count}`);
-                return;
-              }
-            }
-
-            await github.rest.repos.createOrUpdateFileContents({
-              ...repo,
-              path,
-              branch,
-              message: "Update ZIP download counter",
-              content: Buffer.from(text, "utf8").toString("base64"),
-              ...(existing ? { sha: existing.sha } : {})
-            });
-
-            core.info(`ZIP downloads: ${count}`);
+            await saveFile(path, text, "Update manual ZIP download counter");
+            core.info(`Manual ZIP downloads: ${count}${reset ? " (reset)" : ""}`);

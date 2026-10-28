@@ -43,7 +43,7 @@ def beta_installer():
     body = replace_once(body, "CFBundleName string kasholkaTTS\n", "CFBundleName string 'kasholkaTTS Beta'\n")
     body = replace_once(body, "CFBundleDisplayName string kasholkaTTS\n", "CFBundleDisplayName string 'kasholkaTTS Beta'\n")
     body = re.sub(r"CFBundleShortVersionString string \d+\.\d+\.\d+", "CFBundleShortVersionString string " + version.split()[0], body)
-    body = re.sub(r"CFBundleVersion string \d+", "CFBundleVersion string 25", body)
+    body = re.sub(r"CFBundleVersion string \d+", "CFBundleVersion string 30", body)
     anchor = 'cp "$installer_dir/src/voice-host.js" "$built_app/Contents/Resources/voice-host.js"'
     body = replace_once(body, anchor, anchor + '\ncp "$installer_dir/src/beta-probe.js" "$built_app/Contents/Resources/beta-probe.js"')
     body = replace_once(body, '# beta-extra-validation',
@@ -51,9 +51,10 @@ def beta_installer():
     return body
 
 
-def build_beta(output_dir=None):
+def build_beta(output_dir=None, *, manual=False):
     version = (ROOT / "beta/VERSION").read_text(encoding="utf-8").strip()
-    name = "kasholkaTTS-Beta-" + version.replace(" ", "-") + "-macOS-installer"
+    suffix = "-macOS-manual-installer" if manual else "-macOS-installer"
+    name = "kasholkaTTS-Beta-" + version.replace(" ", "-") + suffix
     output = Path(output_dir) if output_dir else ROOT / "dist"
     output.mkdir(parents=True, exist_ok=True)
     files = {
@@ -75,6 +76,7 @@ def build_beta(output_dir=None):
         "assets/voicesinstalling_tutor.gif": "assets/voicesinstalling_tutor.gif",
         "docs/UPDATES.md": "docs/UPDATES.md",
         "docs/LOCALIZATION.md": "docs/LOCALIZATION.md",
+        "docs/DOWNLOAD_COUNTER.md": "docs/DOWNLOAD_COUNTER.md",
         "samples/kasholkaTTS-long-test.txt": "samples/kasholkaTTS-long-test.txt",
         "assets/kasholkaTTS.icns": "beta/assets/kasholkaTTS.icns",
         "assets/about.mp4": "assets/about.mp4", "assets/loading.png": "assets/loading.png",
@@ -95,5 +97,8 @@ def build_beta(output_dir=None):
 
 
 if __name__ == "__main__":
-    for path in build_beta():
-        print(path)
+    # Keep the historical asset name for existing protocol-1 updaters.
+    # The separately named manual installer is the only counted download.
+    for manual in (True, False):
+        for path in build_beta(manual=manual):
+            print(path)

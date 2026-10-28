@@ -1,11 +1,11 @@
-/* kasholkaTTS 1.7.2 Release 2 — macOS 12+, JavaScript for Automation / AppKit.
+/* kasholkaTTS 1.7.4 Release 2.2 — macOS 12+, JavaScript for Automation / AppKit.
  * Compiled as a stay-open applet by the installer using macOS osacompile.
  * Speech stays local. Optional update checks contact GitHub only.
  */
 ObjC.import('Cocoa');
 ObjC.import('AVFoundation');
 
-var VERSION = '1.7.2 Release 2';
+var VERSION = '1.7.4 Release 2.2';
 var ui = {};
 var controller = null;
 var synth = null;

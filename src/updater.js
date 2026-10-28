@@ -1,5 +1,5 @@
 /* AppKit updater. Appended after the main source and update-policy.js. */
-var updater = { controller: null, timer: null, job: null, handedOff: false, items: {} };
+var updater = { controller: null, timer: null, job: null, handedOff: false, didLaunch: false, items: {} };
 
 function updateIsBeta() { return VERSION.indexOf(' Beta ') !== -1; }
 function updateBusy() { return active || !!voiceProbe || (typeof betaJob !== 'undefined' && !!betaJob); }
@@ -91,7 +91,7 @@ function checkForUpdates(manual) {
         updateDirectory(directory);
         updater.job = { directory: directory, beta: updateIsBeta(), manual: manual, page: 1, releases: [] };
         updateMenuState();
-        if (manual) status(t('Проверка обновлений GitHub…'));
+        if (manual || !updateBusy()) status(t('Проверка обновлений GitHub…'));
         updateFetch(updater.job, UPDATE_API + '&page=1', 'releases.json', 8 * 1024 * 1024, 'check');
     } catch (error) { updateFinish(String(error), true); }
 }
@@ -169,7 +169,7 @@ function updateAdvance(job) {
         defaults.setObjectForKey($(Date.now()), $('updateLastCheck'));
         if (!job.release) {
             var manual = job.manual;
-            updateFinish(manual ? t('У вас актуальная версия для этого канала.') : '', false);
+            updateFinish(manual || !updateBusy() ? t('У вас актуальная версия для этого канала.') : '', false);
             if (manual) alertUser(t('Обновлений нет'), t('Установлена ') + VERSION + t('. Новых опубликованных сборок для этого канала нет.'));
             return;
         }
@@ -278,10 +278,13 @@ function updateRestoreText() {
 }
 
 function updateDidLaunch() {
+    // The menu promises a check on every launch, not once per day.
+    // Guard repeated launch callbacks within this process only.
+    if (updater.didLaunch) return;
+    updater.didLaunch = true;
     updateRestoreText();
     var enabled = !!unwrap(defaults.objectForKey($('updateAutoCheck')), true);
-    var last = Number(unwrap(defaults.objectForKey($('updateLastCheck')), 0));
-    if (enabled && Date.now() - last > 24 * 60 * 60 * 1000) checkForUpdates(false);
+    if (enabled) checkForUpdates(false);
 }
 
 function updateWillQuit() {

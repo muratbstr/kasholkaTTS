@@ -11,11 +11,12 @@ from localization import application_source
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build_release(output_dir=None):
+def build_release(output_dir=None, *, manual=False):
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     output = Path(output_dir) if output_dir else ROOT / "dist"
     output.mkdir(parents=True, exist_ok=True)
-    name = f"kasholkaTTS-{version.replace(' ', '-')}-macOS-installer"
+    suffix = "-macOS-manual-installer" if manual else "-macOS-installer"
+    name = f"kasholkaTTS-{version.replace(' ', '-')}{suffix}"
     archive = output / f"{name}.zip"
     files = {
         "Install kasholkaTTS.command": ROOT / "installer/Install kasholkaTTS.command",
@@ -31,6 +32,7 @@ def build_release(output_dir=None):
         "assets/voicesinstalling_tutor.gif": ROOT / "assets/voicesinstalling_tutor.gif",
         "docs/UPDATES.md": ROOT / "docs/UPDATES.md",
         "docs/LOCALIZATION.md": ROOT / "docs/LOCALIZATION.md",
+        "docs/DOWNLOAD_COUNTER.md": ROOT / "docs/DOWNLOAD_COUNTER.md",
         "CHANGELOG.md": ROOT / "CHANGELOG.md",
         "changelog_before_rel.md": ROOT / "changelog_before_rel.md",
         "VERSION": ROOT / "VERSION",
@@ -64,5 +66,8 @@ def build_release(output_dir=None):
 
 
 if __name__ == "__main__":
-    for path in build_release():
-        print(path)
+    # Keep the historical asset name for existing protocol-1 updaters.
+    # The separately named manual installer is the only counted download.
+    for manual in (True, False):
+        for path in build_release(manual=manual):
+            print(path)

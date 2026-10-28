@@ -1,11 +1,15 @@
-# kasholkaTTS Beta 1.7.3 Beta 1
+# kasholkaTTS Beta 1.7.5 Beta 1
 
-Отдельная экспериментальная версия на основе kasholkaTTS 1.7.2 Release 2.
+Отдельная экспериментальная версия на основе kasholkaTTS 1.7.4 Release 2.2.
 Устанавливается как `~/Applications/kasholkaTTS Beta.app`, использует отдельный
 идентификатор `com.kasholka.tts.beta` и отдельные настройки. Основная версия
 остаётся установленной. Иконка — тот же силуэт и скруглённые углы, фон `#0040ff`.
 
 ## Установка
+
+Скачать: [1.7.5 Beta 1](https://github.com/muratbstr/kasholkaTTS/releases/tag/v1.7.5-beta.1). Для ручной установки используйте
+`kasholkaTTS-Beta-1.7.5-Beta-1-macOS-manual-installer.zip`.
+Архив без `manual-` предназначен для автообновлятора и исключён из нового счётчика.
 
 Распакуйте весь архив на Mac с macOS Monterey 12 или новее и запустите
 `Install kasholkaTTS Beta.command`. Для обновления завершите только Beta через ⌘Q.
