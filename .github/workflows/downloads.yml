@@ -16,46 +16,71 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - name: Update ZIP download counter
+        uses: actions/github-script@v8
         with:
-          ref: main
+          script: |
+            const repo = context.repo;
+            const path = "badges/downloads.json";
+            const branch = "main";
 
-      - name: Count ZIP downloads
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          count=$(
-            gh api --paginate \
-              "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-              --jq '[.[] | select(.draft == false) |
-                .assets[] |
-                select(.name | ascii_downcase | endswith(".zip")) |
-                .download_count] | add // 0' |
-            jq -s 'add // 0'
-          )
+            const releases = await github.paginate(
+              github.rest.repos.listReleases,
+              { ...repo, per_page: 100 }
+            );
 
-          mkdir -p badges
-          jq -n --argjson count "$count" '{
-            schemaVersion: 1,
-            label: "Скачивания",
-            message: ($count | tostring),
-            color: "00b000"
-          }' > badges/downloads.json
+            let count = 0;
+            for (const release of releases) {
+              if (release.draft) continue;
+              for (const asset of release.assets) {
+                if (asset.name.toLowerCase().endsWith(".zip")) {
+                  count += asset.download_count;
+                }
+              }
+            }
 
-      - name: Save updated counter
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add badges/downloads.json
+            const text = JSON.stringify({
+              schemaVersion: 1,
+              label: "Скачивания",
+              message: String(count),
+              color: "00b000"
+            }, null, 2) + "\n";
 
-          if git diff --cached --quiet; then
-            exit 0
-          fi
+            let existing;
+            try {
+              const response = await github.rest.repos.getContent({
+                ...repo, path, ref: branch
+              });
+              existing = response.data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
 
-          git commit -m "Update ZIP download counter"
-          git pull --rebase --autostash origin main
-          git push origin HEAD:main
+            if (existing) {
+              if (existing.type !== "file" ||
+                  existing.encoding !== "base64") {
+                throw new Error("Unexpected badge file format");
+              }
+
+              const previous = Buffer.from(
+                existing.content, "base64"
+              ).toString("utf8");
+
+              if (previous === text) {
+                core.info(`Downloads unchanged: ${count}`);
+                return;
+              }
+            }
+
+            await github.rest.repos.createOrUpdateFileContents({
+              ...repo,
+              path,
+              branch,
+              message: "Update ZIP download counter",
+              content: Buffer.from(text, "utf8").toString("base64"),
+              ...(existing ? { sha: existing.sha } : {})
+            });
+
+            core.info(`ZIP downloads: ${count}`);
