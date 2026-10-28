@@ -1,9 +1,9 @@
 # kasholkaTTS
 
+[![Скачивания файлов](https://img.shields.io/github/downloads/muratbstr/kasholkaTTS/total?label=%D0%A1%D0%BA%D0%B0%D1%87%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F%20%D1%84%D0%B0%D0%B9%D0%BB%D0%BE%D0%B2&color=00b000)](https://github.com/muratbstr/kasholkaTTS/releases)
+
 Локальная, бесплатная open-source читалка текста для **macOS Monterey 12 и новее**, на Intel и Apple Silicon.
 Использует системные голоса, интерфейс на русском и английском.
-
-[![Скачивания файлов](https://img.shields.io/github/downloads/muratbstr/kasholkaTTS/total?label=%D0%A1%D0%BA%D0%B0%D1%87%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F%20%D1%84%D0%B0%D0%B9%D0%BB%D0%BE%D0%B2&color=00b000)](https://github.com/muratbstr/kasholkaTTS/releases)
 
 Счётчик учитывает файлы релизов, включая ZIP и `.sha256`, а не число установок.
 
