@@ -1,6 +1,6 @@
 # kasholkaTTS
 
-[![Скачивания файлов](https://img.shields.io/github/downloads/muratbstr/kasholkaTTS/total?label=%D0%A1%D0%BA%D0%B0%D1%87%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F%20%D1%84%D0%B0%D0%B9%D0%BB%D0%BE%D0%B2&color=00b000)](https://github.com/muratbstr/kasholkaTTS/releases)
+[![Скачивания](https://img.shields.io/github/downloads/muratbstr/kasholkaTTS/v1.7.2/kasholkaTTS-1.7.2-Release-2-macOS-installer.zip?displayAssetName=false&label=ZIP&color=00b000)](https://github.com/muratbstr/kasholkaTTS/releases/tag/v1.7.2)
 
 Локальная, бесплатная open-source читалка текста для **macOS Monterey 12 и новее**, на Intel и Apple Silicon.
 Использует системные голоса, интерфейс на русском и английском.
