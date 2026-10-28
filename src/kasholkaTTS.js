@@ -1,11 +1,11 @@
-/* kasholkaTTS 1.5.0 Release 1 — macOS 12+, JavaScript for Automation / AppKit.
+/* kasholkaTTS 1.7.2 Release 2 — macOS 12+, JavaScript for Automation / AppKit.
  * Compiled as a stay-open applet by the installer using macOS osacompile.
- * No browser, network, third-party runtime, or automation of other apps.
+ * Speech stays local. Optional update checks contact GitHub only.
  */
 ObjC.import('Cocoa');
 ObjC.import('AVFoundation');
 
-var VERSION = '1.5.0 Release 1';
+var VERSION = '1.7.2 Release 2';
 var ui = {};
 var controller = null;
 var synth = null;
@@ -32,10 +32,19 @@ var audioExport = null;
 var startup = null;
 var wordDiagnostics = { armed: false, recording: false, header: null, events: [] };
 
+// Russian fallback also keeps the standalone source usable in native tests.
+function t(text, parameters) {
+    if (typeof translateText === 'function') return translateText(text, parameters);
+    return String(text).replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, function (match, key) {
+        return parameters && Object.prototype.hasOwnProperty.call(parameters, key) ? String(parameters[key]) : match;
+    });
+}
+function helperError(text) { return typeof translateHelperError === 'function' ? translateHelperError(text) : text; }
+
 function armWordDiagnostics() {
-    if (active) { status('Сначала остановите чтение, затем включите диагностику подсветки.'); return; }
+    if (active) { status(t('Сначала остановите чтение, затем включите диагностику подсветки.')); return; }
     wordDiagnostics = { armed: true, recording: false, header: null, events: [] };
-    status('Диагностика включена для следующего чтения. Выберите проблемный фрагмент и нажмите «Читать».');
+    status(t('Диагностика включена для следующего чтения. Выберите проблемный фрагмент и нажмите «Читать».'));
 }
 
 function beginWordDiagnostics(text) {
@@ -95,23 +104,23 @@ function wordDiagnosticText() {
 }
 
 function showWordDiagnostics() {
-    if (active) { status('Сначала остановите чтение, затем откройте диагностику подсветки.'); return; }
+    if (active) { status(t('Сначала остановите чтение, затем откройте диагностику подсветки.')); return; }
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Диагностика подсветки');
-    dialog.informativeText = $('Записывает первые 80 событий следующего чтения: голос, позиции и короткие фрагменты вашего текста.\n' +
-        'Отчёт хранится только в памяти до выхода. Ничего не отправляется. Для проверки используйте тестовый TXT.\n\n' +
-        'Событий в текущем отчёте: ' + wordDiagnostics.events.length + '.');
-    dialog.addButtonWithTitle($('Записать следующее чтение'));
-    dialog.addButtonWithTitle($('Скопировать отчёт'));
-    dialog.addButtonWithTitle($('Закрыть'));
+    dialog.messageText = $(t('Диагностика подсветки'));
+    dialog.informativeText = $(t('Записывает первые 80 событий следующего чтения: голос, позиции и короткие фрагменты вашего текста.\n') +
+        t('Отчёт хранится только в памяти до выхода. Ничего не отправляется. Для проверки используйте тестовый TXT.\n\n') +
+        t('Событий в текущем отчёте: ') + wordDiagnostics.events.length + '.');
+    dialog.addButtonWithTitle($(t('Записать следующее чтение')));
+    dialog.addButtonWithTitle($(t('Скопировать отчёт')));
+    dialog.addButtonWithTitle($(t('Закрыть')));
     var result = Number(dialog.runModal);
     if (result === 1000) armWordDiagnostics();
     else if (result === 1001) {
-        if (!wordDiagnostics.events.length) { status('Сначала запишите чтение с включённой диагностикой.'); return; }
+        if (!wordDiagnostics.events.length) { status(t('Сначала запишите чтение с включённой диагностикой.')); return; }
         var pasteboard = $.NSPasteboard.generalPasteboard;
         pasteboard.clearContents;
         pasteboard.setStringForType($(wordDiagnosticText()), $.NSPasteboardTypeString);
-        status('Отчёт подсветки скопирован. Он содержит фрагменты прочитанного текста.');
+        status(t('Отчёт подсветки скопирован. Он содержит фрагменты прочитанного текста.'));
     }
 }
 
@@ -225,7 +234,7 @@ function discardAudioExport() {
 function requireAudioFile(path) {
     var attrs = $.NSFileManager.defaultManager.attributesOfItemAtPathError($(path), Ref());
     if (!attrs || attrs.isNil() || Number(unwrap(attrs.objectForKey($.NSFileSize), 0)) <= 64) {
-        throw new Error('Не удалось получить аудиоданные.');
+        throw new Error(t('Не удалось получить аудиоданные.'));
     }
 }
 
@@ -238,16 +247,16 @@ function publishAudioExport() {
         requireAudioFile(path);
         // Both paths are on the same volume. Only publish a complete file;
         // an existing destination survives cancellation or synthesis failure.
-        if ($.rename(path, job.destination) !== 0) throw new Error('Не удалось переместить готовый файл в выбранную папку.');
-        status('Аудио сохранено: ' + job.destination);
-    } catch (error) { status('Аудио: ' + String(error)); }
+        if ($.rename(path, job.destination) !== 0) throw new Error(t('Не удалось переместить готовый файл в выбранную папку.'));
+        status(t('Аудио сохранено: {path}', { path: job.destination }));
+    } catch (error) { status(t('Аудио: ') + String(error)); }
     finally { discardAudioExport(); updateControls(); }
 }
 
 function failAudioExport(error) {
     active = paused = false;
     discardAudioExport();
-    status('Аудио: ' + String(error));
+    status(t('Аудио: ') + String(error));
     updateControls();
 }
 
@@ -257,7 +266,7 @@ function audioConversionArguments(format, quality, source, destination) {
         args = ['-f', 'm4af', '-d', 'aac@44100', '-b', String(quality), '-q', '127', '-s', '2'];
     } else if (format === 'wav' && [16, 24].indexOf(quality) >= 0) {
         args = ['-f', 'WAVE', '-d', 'LEI' + quality];
-    } else throw new Error('Неизвестный формат или качество аудио.');
+    } else throw new Error(t('Неизвестный формат или качество аудио.'));
     return args.concat([source, destination]);
 }
 
@@ -265,7 +274,7 @@ function finishAudioExport(success) {
     var job = audioExport;
     if (!job || job.task) return;
     try {
-        if (!success) throw new Error('Сохранение отменено.');
+        if (!success) throw new Error(t('Сохранение отменено.'));
         requireAudioFile(job.path);
         if (!job.format || job.format === 'original') { publishAudioExport(); return; }
         job.convertedPath = job.directory + '/converted.' + job.format;
@@ -280,7 +289,7 @@ function finishAudioExport(success) {
         job.timer = $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(
             0.2, controller, 'exportTick:', null, true);
         $.NSRunLoop.mainRunLoop.addTimerForMode(job.timer, $.NSRunLoopCommonModes);
-        status('Преобразую в ' + job.format.toUpperCase() + '… «Стоп» отменяет сохранение.');
+        status(t('Преобразую в ') + job.format.toUpperCase() + t('… «Стоп» отменяет сохранение.'));
     } catch (error) { failAudioExport(error); }
 }
 
@@ -290,7 +299,7 @@ function exportTick() {
     try {
         if (job.task.running) return;
         if (Number(job.task.terminationStatus) !== 0) {
-            throw new Error('Не удалось преобразовать аудио. ' + readHostText(job.directory + '/convert.log').trim().slice(0, 2000));
+            throw new Error(t('Не удалось преобразовать аудио. ') + readHostText(job.directory + '/convert.log').trim().slice(0, 2000));
         }
         publishAudioExport();
     } catch (error) { failAudioExport(error); }
@@ -299,19 +308,19 @@ function exportTick() {
 function chooseAudioExport() {
     var original = engine === 'ns' ? 'AIFF' : 'CAF';
     var choices = [
-        { title: 'M4A · AAC 64 кбит/с — компактный', format: 'm4a', quality: 64000 },
-        { title: 'M4A · AAC 128 кбит/с — стандартный', format: 'm4a', quality: 128000 },
-        { title: 'M4A · AAC 192 кбит/с — высокий', format: 'm4a', quality: 192000 },
-        { title: 'WAV · PCM 16 бит', format: 'wav', quality: 16 },
-        { title: 'WAV · PCM 24 бита', format: 'wav', quality: 24 },
-        { title: original + ' · исходное аудио голоса', format: 'original' }
+        { title: t('M4A · AAC 64 кбит/с — компактный'), format: 'm4a', quality: 64000 },
+        { title: t('M4A · AAC 128 кбит/с — стандартный'), format: 'm4a', quality: 128000 },
+        { title: t('M4A · AAC 192 кбит/с — высокий'), format: 'm4a', quality: 192000 },
+        { title: t('WAV · PCM 16 бит'), format: 'wav', quality: 16 },
+        { title: t('WAV · PCM 24 бита'), format: 'wav', quality: 24 },
+        { title: original + t(' · исходное аудио голоса'), format: 'original' }
     ];
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Формат и качество аудио');
-    dialog.informativeText = $('Сохраняется весь текст или выделенный фрагмент.\n' +
-        'M4A — компактный файл; WAV — без сжатия. Более высокое качество не добавляет деталей исходному голосу.');
-    dialog.addButtonWithTitle($('Далее…'));
-    dialog.addButtonWithTitle($('Отмена'));
+    dialog.messageText = $(t('Формат и качество аудио'));
+    dialog.informativeText = $(t('Сохраняется весь текст или выделенный фрагмент.\n') +
+        t('M4A — компактный файл; WAV — без сжатия. Более высокое качество не добавляет деталей исходному голосу.'));
+    dialog.addButtonWithTitle($(t('Далее…')));
+    dialog.addButtonWithTitle($(t('Отмена')));
     var popup = $.NSPopUpButton.alloc.initWithFramePullsDown($.NSMakeRect(0, 0, 360, 30), false);
     choices.forEach(function (choice) { popup.addItemWithTitle($(choice.title)); });
     popup.selectItemAtIndex(Math.floor(clamp(unwrap(defaults.objectForKey($('audioFormatChoice')), 1), 0, 5, 1)));
@@ -326,15 +335,15 @@ function exportAudio() {
     if (active || !synth) return;
     var range = ui.editor.selectedRange;
     var text = textToRead(unwrap(ui.editor.string, ''), Number(range.location), Number(range.length));
-    if (!text.trim()) { status('Введите текст или выделите фрагмент для сохранения.'); return; }
+    if (!text.trim()) { status(t('Введите текст или выделите фрагмент для сохранения.')); return; }
     var choice = chooseAudioExport();
     if (!choice) return;
     var sourceExtension = engine === 'ns' ? 'aiff' : 'caf';
     var extension = choice.format === 'original' ? sourceExtension : choice.format;
     var panel = $.NSSavePanel.savePanel;
-    panel.title = $('Сохранить речь в аудиофайл');
-    panel.message = $(choice.title + (engine === 'ns' ? ' • выбранный голос и скорость' :
-        '\nДля этого голоса нужны установленные Apple Command Line Tools или Xcode'));
+    panel.title = $(t('Сохранить речь в аудиофайл'));
+    panel.message = $(choice.title + (engine === 'ns' ? t(' • выбранный голос и скорость') :
+        t('\nДля этого голоса нужны установленные Apple Command Line Tools или Xcode')));
     panel.allowedFileTypes = $([extension]);
     panel.allowsOtherFileTypes = false;
     panel.canCreateDirectories = true;
@@ -348,19 +357,19 @@ function exportAudio() {
     var permissions = $.NSMutableDictionary.alloc.init;
     permissions.setObjectForKey($(448), $.NSFilePosixPermissions);
     if (!destination || !$.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(
-        $(directory), false, permissions, Ref())) throw new Error('Не удалось создать временный файл рядом с выбранным.');
+        $(directory), false, permissions, Ref())) throw new Error(t('Не удалось создать временный файл рядом с выбранным.'));
     audioExport = { destination: destination, directory: directory, path: directory + '/speech.' + sourceExtension,
         format: choice.format, quality: choice.quality };
     active = true;
     paused = false;
     updateControls();
-    status('Сохраняю аудио… Кнопка «Стоп» отменяет сохранение.');
+    status(t('Сохраняю аудио… Кнопка «Стоп» отменяет сохранение.'));
     try {
         if (engine === 'ns') {
             applyNSPitch(synth, selectedPitchOffset());
             synth.setRate(voiceBaseRate * speedFactor(ui.rate.doubleValue));
             if (!synth.startSpeakingStringToURL($(text), $.NSURL.fileURLWithPath($(audioExport.path)))) {
-                throw new Error('Голос не начал сохранение аудио.');
+                throw new Error(t('Голос не начал сохранение аудио.'));
             }
         } else {
             var voice = selectedVoice();
@@ -387,7 +396,7 @@ function applyNSPitch(target, offset) {
     var base = Number(unwrap(target.objectForPropertyError($.NSSpeechPitchBaseProperty, Ref()), NaN));
     if (!isFinite(base) || base <= 0 || !target.setObjectForPropertyError(
         $(base + offset), $.NSSpeechPitchBaseProperty, Ref())) {
-        throw new Error('Этот голос не поддерживает изменение высоты.');
+        throw new Error(t('Этот голос не поддерживает изменение высоты.'));
     }
 }
 
@@ -399,19 +408,19 @@ function setDebugPitch(offset) {
     // Check support on a fresh synthesizer, without changing the selected one.
     if (engine === 'ns' && offset) {
         var probe = $.NSSpeechSynthesizer.alloc.initWithVoice($(voice.id));
-        if (!probe || probe.isNil()) throw new Error('Голос недоступен.');
+        if (!probe || probe.isNil()) throw new Error(t('Голос недоступен.'));
         applyNSPitch(probe, offset);
     }
     debugPitchOffsets[voiceKey(voice)] = offset;
-    status(offset ? 'Высота изменена для следующего чтения.' : 'Естественная высота восстановлена.');
+    status(offset ? t('Высота изменена для следующего чтения.') : t('Естественная высота восстановлена.'));
 }
 
 function showDebugPitch() {
-    if (active || voiceProbe) { status('Дождитесь окончания поиска и остановите чтение.'); return; }
-    if (!synth) { status('Сначала выберите голос.'); return; }
+    if (active || voiceProbe) { status(t('Дождитесь окончания поиска и остановите чтение.')); return; }
+    if (!synth) { status(t('Сначала выберите голос.')); return; }
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Высота голоса — экспериментально');
-    dialog.informativeText = $('Слева ниже, справа выше, в середине — естественная высота.\nДля выбранного голоса, со следующего чтения. Эффект зависит от голоса.');
+    dialog.messageText = $(t('Высота голоса — экспериментально'));
+    dialog.informativeText = $(t('Слева ниже, справа выше, в середине — естественная высота.\nДля выбранного голоса, со следующего чтения. Эффект зависит от голоса.'));
     var slider = $.NSSlider.alloc.initWithFrame($.NSMakeRect(0, 0, 320, 28));
     slider.minValue = -12;
     slider.maxValue = 12;
@@ -419,17 +428,17 @@ function showDebugPitch() {
     slider.numberOfTickMarks = 5;
     slider.allowsTickMarkValuesOnly = false;
     dialog.accessoryView = slider;
-    dialog.addButtonWithTitle($('Применить'));
-    dialog.addButtonWithTitle($('Сбросить'));
-    dialog.addButtonWithTitle($('Отмена'));
+    dialog.addButtonWithTitle($(t('Применить')));
+    dialog.addButtonWithTitle($(t('Сбросить')));
+    dialog.addButtonWithTitle($(t('Отмена')));
     var result = Number(dialog.runModal);
     if (result === 1000) setDebugPitch(slider.doubleValue);
     else if (result === 1001) setDebugPitch(0);
 }
 
 function searchSiriVoices() {
-    if (active) { status('Для поиска Siri сначала остановите чтение.'); return; }
-    if (voiceProbe) { status('Поиск Siri уже выполняется.'); return; }
+    if (active) { status(t('Для поиска Siri сначала остановите чтение.')); return; }
+    if (voiceProbe) { status(t('Поиск Siri уже выполняется.')); return; }
     hostVoices = [];
     ['osascript', 'swift'].forEach(function (name) {
         delete voiceDiagnostics[name];
@@ -447,7 +456,7 @@ function voiceDiagnosticText() {
     var os = unwrap($.NSProcessInfo.processInfo.operatingSystemVersionString, 'macOS');
     var lines = ['kasholkaTTS ' + VERSION, os];
     ['app', 'osascript', 'swift'].forEach(function (name) {
-        lines.push('\n' + name + ': ' + (voiceDiagnostics[name] || 'Пока не проверено'));
+        lines.push('\n' + name + ': ' + (voiceDiagnostics[name] || t('Пока не проверено')));
         (voiceInventories[name] || []).forEach(function (voice) {
             lines.push(voice.id + ' | ' + voice.name + ' | ' + voice.locale);
         });
@@ -457,25 +466,25 @@ function voiceDiagnosticText() {
 
 function showVoiceDiagnostics() {
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Диагностика голосов');
+    dialog.messageText = $(t('Диагностика голосов'));
     dialog.informativeText = $(['app', 'osascript', 'swift'].map(function (name) {
-        return name + ': ' + (voiceDiagnostics[name] || 'Пока не проверено');
-    }).join('\n\n').slice(0, 2000) + '\n\nВ отчёте — версия macOS, ошибки и идентификаторы голосов. Вашего текста там нет.');
-    dialog.addButtonWithTitle($('Скопировать отчёт'));
-    dialog.addButtonWithTitle($('Закрыть'));
+        return name + ': ' + (voiceDiagnostics[name] || t('Пока не проверено'));
+    }).join('\n\n').slice(0, 2000) + t('\n\nВ отчёте — версия macOS, ошибки и идентификаторы голосов. Вашего текста там нет.'));
+    dialog.addButtonWithTitle($(t('Скопировать отчёт')));
+    dialog.addButtonWithTitle($(t('Закрыть')));
     if (Number(dialog.runModal) === 1000) {
         var pasteboard = $.NSPasteboard.generalPasteboard;
         pasteboard.clearContents;
         pasteboard.setStringForType($(voiceDiagnosticText()), $.NSPasteboardTypeString);
-        status('Отчёт о голосах скопирован.');
+        status(t('Отчёт о голосах скопирован.'));
     }
 }
 
 function recordVoiceInventory(backend, list) {
     voiceInventories[backend] = list;
     var siri = list.filter(isSiriVoice);
-    voiceDiagnostics[backend] = 'Всего: ' + list.length + ', Siri: ' + siri.length +
-        '\nSiri по языкам: ' + ['en-GB', 'en-US', 'ru-RU'].map(function (locale) {
+    voiceDiagnostics[backend] = t('Всего: ') + list.length + ', Siri: ' + siri.length +
+        t('\nSiri по языкам: ') + ['en-GB', 'en-US', 'ru-RU'].map(function (locale) {
             return locale + ': ' + siri.filter(function (voice) {
                 return String(voice.locale || '').replace(/_/g, '-').toLowerCase() === locale.toLowerCase();
             }).length;
@@ -484,7 +493,7 @@ function recordVoiceInventory(backend, list) {
 
 function writeHostJSON(path, value) {
     if (!$(JSON.stringify(value)).writeToFileAtomicallyEncodingError($(path), true, $.NSUTF8StringEncoding, Ref())) {
-        throw new Error('Не удалось записать данные речевого помощника.');
+        throw new Error(t('Не удалось записать данные речевого помощника.'));
     }
 }
 
@@ -517,27 +526,27 @@ function createHostLog(path) {
     // Pass concrete Foundation objects even for an empty file/default attrs.
     if (!$.NSFileManager.defaultManager.createFileAtPathContentsAttributes(
         $(path), $.NSData.data, $.NSDictionary.dictionary)) {
-        throw new Error('Не удалось создать журнал речевого помощника.');
+        throw new Error(t('Не удалось создать журнал речевого помощника.'));
     }
     var handle = $.NSFileHandle.fileHandleForWritingAtPath($(path));
-    if (!handle || handle.isNil()) throw new Error('Не удалось открыть журнал речевого помощника.');
+    if (!handle || handle.isNil()) throw new Error(t('Не удалось открыть журнал речевого помощника.'));
     return handle;
 }
 
 function startHostJob(mode, request, backend) {
     backend = backend || 'osascript';
     var path = $.NSBundle.mainBundle.pathForResourceOfType($('voice-host'), $(backend === 'swift' ? 'swift' : 'js'));
-    if (!path || path.isNil()) throw new Error('Не найден речевой помощник. Переустановите приложение.');
+    if (!path || path.isNil()) throw new Error(t('Не найден речевой помощник. Переустановите приложение.'));
     var launcher = null;
     if (backend === 'swift') {
         launcher = $.NSBundle.mainBundle.pathForResourceOfType($('voice-host-swift'), $('sh'));
-        if (!launcher || launcher.isNil()) throw new Error('Не найден запускатель Swift. Переустановите приложение.');
+        if (!launcher || launcher.isNil()) throw new Error(t('Не найден запускатель Swift. Переустановите приложение.'));
     }
     var directory = unwrap($.NSTemporaryDirectory(), '') + 'kasholkaTTS-' + unwrap($.NSUUID.UUID.UUIDString, '');
     var permissions = $.NSMutableDictionary.alloc.init;
     permissions.setObjectForKey($(448), $.NSFilePosixPermissions); // 0700
     if (!$.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(
-        $(directory), false, permissions, Ref())) throw new Error('Не удалось создать папку речевого помощника.');
+        $(directory), false, permissions, Ref())) throw new Error(t('Не удалось создать папку речевого помощника.'));
     var timeout = backend === 'swift' ? 60 : 15;
     var job = { directory: directory, mode: mode, backend: backend, timeout: timeout,
         command: 'play', deadline: Date.now() + timeout * 1000, ready: false };
@@ -583,9 +592,9 @@ function beginVoiceProbe(backend) {
     disposeHostJob(voiceProbe);
     voiceProbe = null;
     try {
-        voiceDiagnostics[backend] = 'Проверяется…';
+        voiceDiagnostics[backend] = t('Проверяется…');
         voiceProbe = startHostJob('list', null, backend);
-        if (!active) status(backend === 'swift' ? 'Проверяю Siri через Swift (до 60 с)…' : 'Проверяю Siri через osascript…');
+        if (!active) status(backend === 'swift' ? t('Проверяю Siri через Swift (до 60 с)…') : t('Проверяю Siri через osascript…'));
     } catch (error) {
         voiceDiagnostics[backend] = String(error);
         finishVoiceProbe(backend, false);
@@ -598,24 +607,24 @@ function finishVoiceProbe(backend, succeeded) {
         beginVoiceProbe('swift');
         return;
     }
-    if (backend === 'osascript') voiceDiagnostics.swift = 'Не запускался: Siri уже найдены.';
+    if (backend === 'osascript') voiceDiagnostics.swift = t('Не запускался: Siri уже найдены.');
     if (active) return;
     var count = voices.filter(isSiriVoice).length;
-    if (count) status('Найдено голосов Siri: ' + count + '. Выберите [Siri] в списке.');
-    else status(succeeded ? 'Siri не найдены. Дебаг → Диагностика голосов.' :
-        'Проверка Siri не завершена. Дебаг → Диагностика голосов.');
+    if (count) status(t('Найдено голосов Siri: ') + count + t('. Выберите [Siri] в списке.'));
+    else status(succeeded ? t('Siri не найдены. Дебаг → Диагностика голосов.') :
+        t('Проверка Siri не завершена. Дебаг → Диагностика голосов.'));
 }
 
 function pollHostJob(job) {
     var result = readHostJSON(job.directory + '/result.json');
-    if (result && result.state === 'error') throw new Error(result.message);
+    if (result && result.state === 'error') throw new Error(helperError(result.message));
     if (result && (result.state === 'voices' || result.state === 'finished')) return result;
     if (!job.task.running) {
-        var detail = readHostText(job.directory + '/stderr.txt').trim().slice(0, 4000);
-        throw new Error('Помощник ' + job.backend + ' завершился (код ' + job.task.terminationStatus + '). ' + detail);
+        var detail = helperError(readHostText(job.directory + '/stderr.txt').trim().slice(0, 4000));
+        throw new Error(t('Помощник ') + job.backend + t(' завершился (код ') + job.task.terminationStatus + '). ' + detail);
     }
     if (result && (result.state === 'speaking' || result.state === 'paused' || result.state === 'exporting')) job.ready = true;
-    if (!job.ready && Date.now() > job.deadline) throw new Error('Речевой помощник не ответил за ' + job.timeout + ' секунд.');
+    if (!job.ready && Date.now() > job.deadline) throw new Error(t('Речевой помощник не ответил за ') + job.timeout + t(' секунд.'));
     if (Date.now() - job.heartbeat > 2000) sendHostCommand(job);
     return result;
 }
@@ -627,7 +636,7 @@ function hostTick() {
             var inventory = pollHostJob(voiceProbe);
             // Keep the current voice menu stable until a reading finishes.
             if (inventory && inventory.state === 'voices' && !active) {
-                if (!Array.isArray(inventory.voices)) throw new Error('Некорректный список голосов.');
+                if (!Array.isArray(inventory.voices)) throw new Error(t('Некорректный список голосов.'));
                 recordVoiceInventory(probeBackend, inventory.voices);
                 hostVoices = hostVoices.filter(function (voice) { return (voice.backend || 'osascript') !== probeBackend; });
                 hostVoices = hostVoices.concat(inventory.voices.map(function (voice) {
@@ -658,16 +667,16 @@ function hostTick() {
                 active = false;
                 paused = false;
                 endReading();
-                status('Прочитано');
+                status(t('Прочитано'));
                 updateControls();
             } else if (result && (result.state === 'speaking' || result.state === 'paused')) {
                 paused = result.state === 'paused';
                 if (result.range) highlightWord(result.range);
-                status(paused ? 'Пауза' : 'Читаю текст…');
+                status(paused ? t('Пауза') : t('Читаю текст…'));
                 updateControls();
             }
         } catch (error) {
-            var operation = audioExport ? 'Сохранение аудио: ' : 'Чтение: ';
+            var operation = audioExport ? t('Сохранение аудио: ') : t('Чтение: ');
             disposeHostJob(hostSpeech);
             hostSpeech = null;
             active = false;
@@ -697,13 +706,13 @@ function avFoundationClass(name) {
     if (klass && !(klass.isNil && klass.isNil())) return klass;
     var bundle = $.NSBundle.bundleWithPath($('/System/Library/Frameworks/AVFoundation.framework'));
     if (!bundle || bundle.isNil() || !bundle.load) {
-        throw new Error('Не удалось загрузить системный мультимедийный движок.');
+        throw new Error(t('Не удалось загрузить системный мультимедийный движок.'));
     }
     // Keep the loaded bundle alive for as long as its classes are in use.
     avFoundationBundle = bundle;
     klass = $.NSClassFromString($(name));
     if (!klass || klass.isNil && klass.isNil()) {
-        throw new Error('Системный класс недоступен: ' + name);
+        throw new Error(t('Системный класс недоступен: ') + name);
     }
     return klass;
 }
@@ -729,7 +738,7 @@ function finishAV(sender, utterance, finished) {
     paused = false;
     currentUtterance = null;
     endReading();
-    status(finished ? 'Прочитано' : 'Чтение прервано');
+    status(finished ? t('Прочитано') : t('Чтение прервано'));
     updateControls();
 }
 
@@ -768,7 +777,7 @@ function guarded(action) {
     return function () {
         try { action(); }
         catch (error) {
-            status('Ошибка. Попробуйте другой голос или перезапустите приложение.');
+            status(t('Ошибка. Попробуйте другой голос или перезапустите приложение.'));
             alertUser('kasholkaTTS', String(error));
         }
     };
@@ -779,7 +788,7 @@ function updateControls() {
     ui.play.enabled = ready && !active;
     if (ui.preview) ui.preview.enabled = ready && !active;
     ui.pause.enabled = active && !audioExport;
-    ui.pause.title = $(paused ? 'Продолжить' : 'Пауза');
+    ui.pause.title = $(paused ? t('Продолжить') : t('Пауза'));
     ui.stop.enabled = active;
     ui.voice.enabled = !active && voices.length > 0;
     ui.refresh.enabled = !active;
@@ -800,7 +809,7 @@ function applyRate() {
     var factor = speedFactor(position);
     // Never write back to the knob from its action while the user is dragging.
     ui.rateValue.stringValue = $(engine !== 'ns' ? factor.toFixed(2) + '×' :
-        Math.round(voiceBaseRate * factor) + ' сл/мин');
+        Math.round(voiceBaseRate * factor) + t(' сл/мин'));
     defaults.setDoubleForKey(position, $('speedPosition'));
 }
 
@@ -816,7 +825,7 @@ function selectVoice(savePreference) {
         $.NSSpeechSynthesizer.alloc.initWithVoice($(item.id));
     if (!synth || synth.isNil()) {
         synth = null;
-        status('Голос недоступен. Выберите другой или обновите список.');
+        status(t('Голос недоступен. Выберите другой или обновите список.'));
         updateControls();
         return;
     }
@@ -824,7 +833,7 @@ function selectVoice(savePreference) {
     voiceBaseRate = engine === 'ns' ? clamp(synth.rate, 80, 400, 180) : 180;
     if (savePreference !== false) defaults.setObjectForKey($(voiceKey(item)), $('voice'));
     applyRate();
-    status('Готово • ' + item.name);
+    status(t('Готово • ') + item.name);
     updateControls();
 }
 
@@ -847,7 +856,7 @@ function refreshVoices() {
         voices.push({
             engine: 'ns',
             id: unwrap(id, ''),
-            name: unwrap(attrs.objectForKey($.NSVoiceName), unwrap(id, 'Голос')),
+            name: unwrap(attrs.objectForKey($.NSVoiceName), unwrap(id, t('Голос'))),
             locale: unwrap(attrs.objectForKey($.NSVoiceLocaleIdentifier), '')
         });
     }
@@ -883,46 +892,47 @@ function selectedVoice() {
 
 function voiceLanguage(voice) {
     var code = String(voice.locale || '').replace(/_/g, '-').split('-')[0].toLowerCase();
-    var names = { ar: 'Арабский', bg: 'Болгарский', ca: 'Каталанский', cs: 'Чешский',
-        da: 'Датский', de: 'Немецкий', el: 'Греческий', en: 'Английский', es: 'Испанский',
-        fi: 'Финский', fr: 'Французский', he: 'Иврит', hi: 'Хинди', hr: 'Хорватский',
-        hu: 'Венгерский', id: 'Индонезийский', it: 'Итальянский', ja: 'Японский',
-        ko: 'Корейский', ms: 'Малайский', nb: 'Норвежский', nl: 'Нидерландский',
-        pl: 'Польский', pt: 'Португальский', ro: 'Румынский', ru: 'Русский',
-        sk: 'Словацкий', sv: 'Шведский', ta: 'Тамильский', th: 'Тайский',
-        tr: 'Турецкий', uk: 'Украинский', vi: 'Вьетнамский', zh: 'Китайский' };
+    var names = { ar: t('Арабский'), bg: t('Болгарский'), ca: t('Каталанский'), cs: t('Чешский'),
+        da: t('Датский'), de: t('Немецкий'), el: t('Греческий'), en: t('Английский'), es: t('Испанский'),
+        fi: t('Финский'), fr: t('Французский'), he: t('Иврит'), hi: t('Хинди'), hr: t('Хорватский'),
+        hu: t('Венгерский'), id: t('Индонезийский'), it: t('Итальянский'), ja: t('Японский'),
+        ko: t('Корейский'), ms: t('Малайский'), nb: t('Норвежский'), nl: t('Нидерландский'),
+        pl: t('Польский'), pt: t('Португальский'), ro: t('Румынский'), ru: t('Русский'),
+        sk: t('Словацкий'), sv: t('Шведский'), ta: t('Тамильский'), th: t('Тайский'),
+        tr: t('Турецкий'), uk: t('Украинский'), vi: t('Вьетнамский'), zh: t('Китайский') };
     if (code === 'iw') code = 'he';
     if (code === 'in') code = 'id';
-    return { code: code || 'und', name: names[code] || (code ? 'Язык: ' + code : 'Язык не указан') };
+    return { code: code || 'und', name: names[code] || (code ? t('Язык: ') + code : t('Язык не указан')) };
 }
 
 function voiceGroup(voice) {
     var language = voiceLanguage(voice);
     var parts = String(voice.locale || '').replace(/_/g, '-').split('-');
     var region = parts.slice(1).join('-').toUpperCase();
-    var regions = { RU: 'Россия', US: 'Соединённые Штаты Америки', GB: 'Великобритания',
-        SCOTLAND: 'Англо-шотландский', AU: 'Австралия', IE: 'Ирландия', IN: 'Индия',
-        ZA: 'Южная Африка', CA: 'Канада', FR: 'Франция', DE: 'Германия', IT: 'Италия',
-        ES: 'Испания', MX: 'Мексика', AR: 'Аргентина', PT: 'Португалия', BR: 'Бразилия',
-        CN: 'Китай', TW: 'Тайвань', HK: 'Гонконг', JP: 'Япония', KR: 'Южная Корея',
-        AT: 'Австрия', BE: 'Бельгия', CH: 'Швейцария', NL: 'Нидерланды', SE: 'Швеция',
-        NO: 'Норвегия', DK: 'Дания', FI: 'Финляндия', PL: 'Польша', CZ: 'Чехия',
-        SK: 'Словакия', HU: 'Венгрия', RO: 'Румыния', GR: 'Греция', TR: 'Турция',
-        IL: 'Израиль', SA: 'Саудовская Аравия', TH: 'Таиланд', ID: 'Индонезия',
-        VN: 'Вьетнам', UA: 'Украина', MY: 'Малайзия' };
+    var regions = { RU: t('Россия'), US: t('Соединённые Штаты Америки'), GB: t('Великобритания'),
+        SCOTLAND: t('Англо-шотландский'), AU: t('Австралия'), IE: t('Ирландия'), IN: t('Индия'),
+        ZA: t('Южная Африка'), CA: t('Канада'), FR: t('Франция'), DE: t('Германия'), IT: t('Италия'),
+        ES: t('Испания'), MX: t('Мексика'), AR: t('Аргентина'), PT: t('Португалия'), BR: t('Бразилия'),
+        CN: t('Китай'), TW: t('Тайвань'), HK: t('Гонконг'), JP: t('Япония'), KR: t('Южная Корея'),
+        AT: t('Австрия'), BE: t('Бельгия'), CH: t('Швейцария'), NL: t('Нидерланды'), SE: t('Швеция'),
+        NO: t('Норвегия'), DK: t('Дания'), FI: t('Финляндия'), PL: t('Польша'), CZ: t('Чехия'),
+        SK: t('Словакия'), HU: t('Венгрия'), RO: t('Румыния'), GR: t('Греция'), TR: t('Турция'),
+        IL: t('Израиль'), SA: t('Саудовская Аравия'), TH: t('Таиланд'), ID: t('Индонезия'),
+        VN: t('Вьетнам'), UA: t('Украина'), MY: t('Малайзия') };
     var funny = /^com\.apple\.speech\.synthesis\.voice\.(albert|badnews|bahh|bells|boing|bubbles|cellos|deranged|goodnews|hysterical|organ|trinoids|whisper|zarvox)$/i.test(voice.id || '');
     var title = language.name + (region ? ' (' + (regions[region] || region) + ')' : '');
-    if (funny) title += ' — Забавные';
+    if (funny) title += t(' — Забавные');
     return { key: language.code + ':' + region + ':' + (funny ? '1' : '0'),
         language: language.code, region: region, funny: funny, title: title };
 }
 
 function populateVoices(preferred, avFailed) {
+    var firstLanguage = typeof uiLanguage === 'string' ? uiLanguage : 'ru';
     voices.sort(function (a, b) {
         var left = voiceGroup(a), right = voiceGroup(b);
         if (left.key !== right.key) {
-            if (left.language === 'ru' && right.language !== 'ru') return -1;
-            if (right.language === 'ru' && left.language !== 'ru') return 1;
+            if (left.language === firstLanguage && right.language !== firstLanguage) return -1;
+            if (right.language === firstLanguage && left.language !== firstLanguage) return 1;
             if (left.language === right.language && left.region === right.region) return left.funny ? 1 : -1;
             return left.title.localeCompare(right.title);
         }
@@ -964,11 +974,11 @@ function populateVoices(preferred, avFailed) {
     } else {
         stopSynth();
         synth = null;
-        status('Нет доступных голосов. Добавьте голос в настройках macOS и нажмите «Обновить».');
+        status(t('Нет доступных голосов. Добавьте голос в настройках macOS и нажмите «Обновить».'));
         updateControls();
     }
-    if (!active && avFailed) status('Дополнительные голоса недоступны. Обычные голоса можно использовать.');
-    ui.voice.toolTip = $('Голосов Siri в списке: ' + siriCount);
+    if (!active && avFailed) status(t('Дополнительные голоса недоступны. Обычные голоса можно использовать.'));
+    ui.voice.toolTip = $(t('Голосов Siri в списке: ') + siriCount);
 }
 
 function voicePreviewText(locale) {
@@ -996,7 +1006,7 @@ function play(preview) {
     var range = ui.editor.selectedRange;
     var text = preview ? voicePreviewText((selectedVoice() || {}).locale) :
         textToRead(unwrap(ui.editor.string, ''), Number(range.location), Number(range.length));
-    if (!text.trim()) { status('Введите текст или выделите фрагмент для чтения.'); return; }
+    if (!text.trim()) { status(t('Введите текст или выделите фрагмент для чтения.')); return; }
     // Recreate the synthesizer for EVERY reading, including after a natural
     // finish. Apply the final slider position explicitly to this new instance.
     selectVoice();
@@ -1010,7 +1020,7 @@ function play(preview) {
         // Remove selection paint so the temporary highlight is visible.
         ui.editor.setSelectedRange($.NSMakeRange(reading.offset, 0));
     }
-    status(preview ? 'Прослушивание голоса…' : range.length > 0 ? 'Читаю выделенный фрагмент…' : 'Читаю текст…');
+    status(preview ? t('Прослушивание голоса…') : range.length > 0 ? t('Читаю выделенный фрагмент…') : t('Читаю текст…'));
     updateControls();
     var started;
     try {
@@ -1020,12 +1030,12 @@ function play(preview) {
             var hostVoice = selectedVoice();
             hostSpeech = startHostJob('speak', { id: hostVoice.id, text: text,
                 factor: speedFactor(ui.rate.doubleValue), pitch: pitchFactor }, hostVoice.backend);
-            status('Запускаю выбранный голос…');
+            status(t('Запускаю выбранный голос…'));
             started = true;
         } else if (engine === 'av') {
             var item = selectedVoice();
             var avVoice = avFoundationClass('AVSpeechSynthesisVoice').voiceWithIdentifier($(item.id));
-            if (!avVoice || avVoice.isNil()) throw new Error('Выбранный голос больше недоступен. Обновите список.');
+            if (!avVoice || avVoice.isNil()) throw new Error(t('Выбранный голос больше недоступен. Обновите список.'));
             currentUtterance = avFoundationClass('AVSpeechUtterance').speechUtteranceWithString($(text));
             currentUtterance.voice = avVoice;
             var naturalRate = clamp(currentUtterance.rate, 0.1, 1, 0.5);
@@ -1049,7 +1059,7 @@ function play(preview) {
     if (!started) {
         active = false;
         endReading();
-        status('Не удалось начать чтение. Попробуйте другой голос.');
+        status(t('Не удалось начать чтение. Попробуйте другой голос.'));
         updateControls();
     }
 }
@@ -1064,12 +1074,12 @@ function pauseOrResume() {
         var resumed = synth.continueSpeaking;
         if (engine === 'av' && !resumed) return;
         paused = false;
-        status('Читаю текст…');
+        status(t('Читаю текст…'));
     } else {
         var didPause = synth.pauseSpeakingAtBoundary(engine === 'av' ? 0 : $.NSSpeechImmediateBoundary);
         if (engine === 'av' && !didPause) return;
         paused = true;
-        status('Пауза');
+        status(t('Пауза'));
     }
     updateControls();
 }
@@ -1081,7 +1091,7 @@ function stop() {
     stopSynth();
     discardAudioExport();
     selectVoice();
-    status('Остановлено');
+    status(t('Остановлено'));
     updateControls();
 }
 
@@ -1091,13 +1101,13 @@ function reset() {
     if (voice) delete debugPitchOffsets[voiceKey(voice)];
     ui.rate.doubleValue = 0.5;
     applyRate();
-    status('Параметры голоса сброшены');
+    status(t('Параметры голоса сброшены'));
 }
 
 function openText() {
     if (active) return;
     var panel = $.NSOpenPanel.openPanel;
-    panel.title = $('Открыть текст');
+    panel.title = $(t('Открыть текст'));
     panel.allowedFileTypes = $(['txt', 'text', 'md']);
     panel.allowsMultipleSelection = false;
     panel.canChooseDirectories = false;
@@ -1105,13 +1115,13 @@ function openText() {
     var error = Ref();
     var text = $.NSString.stringWithContentsOfURLUsedEncodingError(panel.URL, Ref(), error);
     if (!text || text.isNil()) {
-        alertUser('Не удалось открыть файл', 'Сохраните его как обычный текст UTF-8 или UTF-16 и попробуйте снова.');
+        alertUser(t('Не удалось открыть файл'), t('Сохраните его как обычный текст UTF-8 или UTF-16 и попробуйте снова.'));
         return;
     }
     ui.editor.string = text;
     ui.editor.setSelectedRange($.NSMakeRange(0, 0));
     ui.editor.scrollRangeToVisible($.NSMakeRange(0, 0));
-    status('Файл открыт. Нажмите «Читать».');
+    status(t('Файл открыт. Нажмите «Читать».'));
 }
 
 function registerController() {
@@ -1185,7 +1195,7 @@ function registerController() {
                     active = false;
                     paused = false;
                     endReading();
-                    status(finished ? 'Прочитано' : 'Чтение прервано');
+                    status(finished ? t('Прочитано') : t('Чтение прервано'));
                     updateControls();
                 }
             },
@@ -1321,7 +1331,7 @@ function startAboutVideo() {
     var player = null, looper = null, background = null;
     try {
         var path = $.NSBundle.mainBundle.pathForResourceOfType($('about'), $('mp4'));
-        if (!path || path.isNil()) throw new Error('Не найдено видео About. Переустановите приложение из нового архива.');
+        if (!path || path.isNil()) throw new Error(t('Не найдено видео About. Переустановите приложение из нового архива.'));
         var classes = videoClasses();
         player = classes.AVQueuePlayer.alloc.initWithItems($([]));
         player.muted = true;
@@ -1352,7 +1362,7 @@ function startAboutVideo() {
         if (player) { try { player.pause; } catch (ignored) {} }
         if (looper) { try { looper.disableLooping; } catch (ignored) {} }
         if (background) { try { background.removeFromSuperview; } catch (ignored) {} }
-        status('About открыто без видео: ' + String(error));
+        status(t('About открыто без видео: ') + String(error));
     }
 }
 
@@ -1403,7 +1413,7 @@ function showAbout() {
             $.NSMakeRect(0, 0, 560, 400), $.NSWindowStyleMaskTitled | $.NSWindowStyleMaskClosable |
                 $.NSWindowStyleMaskFullSizeContentView,
             $.NSBackingStoreBuffered, false);
-        window.title = $('О kasholkaTTS');
+        window.title = $(t('О kasholkaTTS'));
         window.titlebarAppearsTransparent = true;
         window.titleVisibility = $.NSWindowTitleHidden;
         window.movableByWindowBackground = true;
@@ -1439,48 +1449,50 @@ function installMenus() {
     var menu = $.NSMenu.alloc.init;
     var appItem = $.NSMenuItem.alloc.init;
     var appMenu = $.NSMenu.alloc.initWithTitle($('kasholkaTTS'));
-    var aboutItem = appMenu.addItemWithTitleActionKeyEquivalent($('О kasholkaTTS'), 'about:', $(''));
+    var aboutItem = appMenu.addItemWithTitleActionKeyEquivalent($(t('О kasholkaTTS')), 'about:', $(''));
     aboutItem.target = controller;
+    if (typeof installLanguageMenu === 'function') installLanguageMenu(appMenu);
+    if (typeof installUpdateMenu === 'function') installUpdateMenu(appMenu);
     appMenu.addItem($.NSMenuItem.separatorItem);
-    appMenu.addItemWithTitleActionKeyEquivalent($('Скрыть kasholkaTTS'), 'hide:', $('h'));
-    var quitItem = appMenu.addItemWithTitleActionKeyEquivalent($('Завершить kasholkaTTS'), 'quitApp:', $('q'));
+    appMenu.addItemWithTitleActionKeyEquivalent($(t('Скрыть kasholkaTTS')), 'hide:', $('h'));
+    var quitItem = appMenu.addItemWithTitleActionKeyEquivalent($(t('Завершить kasholkaTTS')), 'quitApp:', $('q'));
     quitItem.target = controller;
     appItem.submenu = appMenu;
     menu.addItem(appItem);
     var fileItem = $.NSMenuItem.alloc.init;
-    var fileMenu = $.NSMenu.alloc.initWithTitle($('Файл'));
+    var fileMenu = $.NSMenu.alloc.initWithTitle($(t('Файл')));
     fileMenu.autoenablesItems = false;
-    var openItem = fileMenu.addItemWithTitleActionKeyEquivalent($('Открыть текст…'), 'openText:', $('o'));
+    var openItem = fileMenu.addItemWithTitleActionKeyEquivalent($(t('Открыть текст…')), 'openText:', $('o'));
     openItem.target = controller;
-    ui.exportItem = fileMenu.addItemWithTitleActionKeyEquivalent($('Сохранить речь в аудиофайл…'), 'exportAudio:', $('s'));
+    ui.exportItem = fileMenu.addItemWithTitleActionKeyEquivalent($(t('Сохранить речь в аудиофайл…')), 'exportAudio:', $('s'));
     ui.exportItem.target = controller;
     fileItem.submenu = fileMenu;
     menu.addItem(fileItem);
     var editItem = $.NSMenuItem.alloc.init;
-    var editMenu = $.NSMenu.alloc.initWithTitle($('Правка'));
-    [['Отменить', 'undo:', 'z'], ['Вырезать', 'cut:', 'x'], ['Копировать', 'copy:', 'c'],
-        ['Вставить', 'paste:', 'v'], ['Выделить всё', 'selectAll:', 'a']].forEach(function (entry) {
+    var editMenu = $.NSMenu.alloc.initWithTitle($(t('Правка')));
+    [[t('Отменить'), 'undo:', 'z'], [t('Вырезать'), 'cut:', 'x'], [t('Копировать'), 'copy:', 'c'],
+        [t('Вставить'), 'paste:', 'v'], [t('Выделить всё'), 'selectAll:', 'a']].forEach(function (entry) {
         editMenu.addItemWithTitleActionKeyEquivalent($(entry[0]), entry[1], $(entry[2]));
     });
     editItem.submenu = editMenu;
     menu.addItem(editItem);
     var viewItem = $.NSMenuItem.alloc.init;
-    var viewMenu = $.NSMenu.alloc.initWithTitle($('Вид'));
-    ui.autoScrollItem = viewMenu.addItemWithTitleActionKeyEquivalent($('Автопрокрутка при чтении'), 'autoScroll:', $(''));
+    var viewMenu = $.NSMenu.alloc.initWithTitle($(t('Вид')));
+    ui.autoScrollItem = viewMenu.addItemWithTitleActionKeyEquivalent($(t('Автопрокрутка при чтении')), 'autoScroll:', $(''));
     ui.autoScrollItem.target = controller;
     ui.autoScrollItem.state = autoScroll ? 1 : 0;
     viewMenu.addItem($.NSMenuItem.separatorItem);
-    [['Увеличить масштаб', 'zoomIn:', '='], ['Уменьшить масштаб', 'zoomOut:', '-'],
-        ['Масштаб 100%', 'zoomReset:', '0']].forEach(function (entry) {
+    [[t('Увеличить масштаб'), 'zoomIn:', '='], [t('Уменьшить масштаб'), 'zoomOut:', '-'],
+        [t('Масштаб 100%'), 'zoomReset:', '0']].forEach(function (entry) {
         var item = viewMenu.addItemWithTitleActionKeyEquivalent($(entry[0]), entry[1], $(entry[2]));
         item.target = controller;
     });
     viewItem.submenu = viewMenu;
     menu.addItem(viewItem);
     var debugItem = $.NSMenuItem.alloc.init;
-    var debugMenu = $.NSMenu.alloc.initWithTitle($('Дебаг'));
-    [['Поиск голосов Siri', 'searchSiri:'], ['Высота голоса…', 'debugPitch:'],
-        ['Диагностика голосов…', 'voiceDiagnostics:'], ['Диагностика подсветки…', 'wordDiagnostics:']].forEach(function (entry) {
+    var debugMenu = $.NSMenu.alloc.initWithTitle($(t('Дебаг')));
+    [[t('Поиск голосов Siri'), 'searchSiri:'], [t('Высота голоса…'), 'debugPitch:'],
+        [t('Диагностика голосов…'), 'voiceDiagnostics:'], [t('Диагностика подсветки…'), 'wordDiagnostics:']].forEach(function (entry) {
         var item = debugMenu.addItemWithTitleActionKeyEquivalent($(entry[0]), entry[1], $(''));
         item.target = controller;
     });
@@ -1508,9 +1520,9 @@ function showStartup() {
     window.hasShadow = true;
     window.backgroundColor = $.NSColor.blackColor;
     var path = $.NSBundle.mainBundle.pathForResourceOfType($('loading'), $('png'));
-    if (!path || path.isNil()) throw new Error('Не найден фон загрузки. Переустановите приложение из полного архива.');
+    if (!path || path.isNil()) throw new Error(t('Не найден фон загрузки. Переустановите приложение из полного архива.'));
     var picture = $.NSImage.alloc.initWithContentsOfFile(path);
-    if (!picture || picture.isNil()) throw new Error('Не удалось открыть фон загрузки.');
+    if (!picture || picture.isNil()) throw new Error(t('Не удалось открыть фон загрузки.'));
     var imageView = $.NSImageView.alloc.initWithFrame($.NSMakeRect(0, 0, 616, 393));
     imageView.image = picture;
     imageView.imageScaling = $.NSImageScaleAxesIndependently;
@@ -1521,7 +1533,7 @@ function showStartup() {
     version.font = $.NSFont.systemFontOfSize(12);
     version.textColor = $.NSColor.whiteColor;
     window.contentView.addSubview(version);
-    var label = $.NSTextField.labelWithString($('Подготовка интерфейса…'));
+    var label = $.NSTextField.labelWithString($(t('Подготовка интерфейса…')));
     label.frame = $.NSMakeRect(214, 17, 382, 20);
     label.alignment = $.NSTextAlignmentRight;
     label.font = $.NSFont.systemFontOfSize(12);
@@ -1542,24 +1554,25 @@ function startupTick() {
         if (startup.stage === 0) {
             buildMainWindow();
             startup.stage = 1;
-            setStartupStage('Загрузка системных голосов…');
+            setStartupStage(t('Загрузка системных голосов…'));
         } else if (startup.stage === 1) {
             refreshVoices();
             startup.stage = 2;
-            setStartupStage('Применение настроек…');
+            setStartupStage(t('Применение настроек…'));
         } else if (startup.stage === 2) {
             setScale(clamp(unwrap(defaults.objectForKey($('uiScale')), 1), 0.8, 1.5, 1));
             ui.window.center;
             startup.stage = 3;
-            setStartupStage('Готово');
+            setStartupStage(t('Готово'));
         } else if (Date.now() - startup.shownAt >= 1000) {
             ui.window.makeKeyAndOrderFront(null);
             ui.window.makeFirstResponder(ui.editor);
             closeStartup();
+            if (typeof updateDidLaunch === 'function') updateDidLaunch();
         }
     } catch (error) {
         closeStartup();
-        alertUser('Не удалось запустить kasholkaTTS', String(error));
+        alertUser(t('Не удалось запустить kasholkaTTS'), String(error));
         terminateApp();
     } finally { if (startup) startup.busy = false; }
 }
@@ -1568,6 +1581,7 @@ function run() {
     if (startup) { startup.window.orderFrontRegardless; return; }
     if (ui.window) { ui.window.makeKeyAndOrderFront(null); return; }
     defaults = $.NSUserDefaults.standardUserDefaults;
+    if (typeof initLocalization === 'function') initLocalization();
     autoScroll = !!unwrap(defaults.objectForKey($('autoScroll')), true);
     ObjC.bindFunction('rmdir', ['int', ['char *']]);
     ObjC.bindFunction('rename', ['int', ['char *', 'char *']]);
@@ -1577,7 +1591,7 @@ function run() {
     try { showStartup(); }
     catch (error) {
         closeStartup();
-        alertUser('Не удалось запустить kasholkaTTS', String(error));
+        alertUser(t('Не удалось запустить kasholkaTTS'), String(error));
         terminateApp();
         return;
     }
@@ -1595,21 +1609,21 @@ function buildMainWindow() {
     ui.window.delegate = controller;
     ui.content = ui.window.contentView;
 
-    ui.voiceLabel = addLabel('Голос', 13, false);
+    ui.voiceLabel = addLabel(t('Голос'), 13, false);
     ui.voice = $.NSPopUpButton.alloc.initWithFramePullsDown($.NSMakeRect(0, 0, 500, 32), false);
     ui.voice.target = controller;
     ui.voice.action = 'voice:';
     ui.content.addSubview(ui.voice);
-    ui.refresh = addButton('Обновить', 'refresh:');
-    ui.preview = addButton('Прослушать', 'previewVoice:');
-    ui.preview.toolTip = $('Короткая проба выбранного голоса с текущей скоростью. «Стоп» прерывает прослушивание.');
-    ui.rateLabel = addLabel('Скорость', 13, false);
+    ui.refresh = addButton(t('Обновить'), 'refresh:');
+    ui.preview = addButton(t('Прослушать'), 'previewVoice:');
+    ui.preview.toolTip = $(t('Короткая проба выбранного голоса с текущей скоростью. «Стоп» прерывает прослушивание.'));
+    ui.rateLabel = addLabel(t('Скорость'), 13, false);
     ui.rate = addSlider(0, 1, clamp(unwrap(defaults.objectForKey($('speedPosition')), 0.5), 0, 1, 0.5),
         'rate:');
-    ui.rate.toolTip = $('Слева медленнее, справа быстрее. Посередине — обычный темп. Применяется при новом чтении.');
+    ui.rate.toolTip = $(t('Слева медленнее, справа быстрее. Посередине — обычный темп. Применяется при новом чтении.'));
     ui.rateValue = addLabel('', 13, true);
-    ui.textLabel = addLabel('ВАШ ТЕКСТ', 12, true);
-    ui.open = addButton('Открыть .txt…', 'openText:');
+    ui.textLabel = addLabel(t('ВАШ ТЕКСТ'), 12, true);
+    ui.open = addButton(t('Открыть .txt…'), 'openText:');
 
     var scroll = $.NSScrollView.alloc.initWithFrame($.NSMakeRect(16, 92, 728, 280));
     ui.scroll = scroll;
@@ -1634,11 +1648,11 @@ function buildMainWindow() {
     scroll.documentView = ui.editor;
     ui.content.addSubview(scroll);
 
-    ui.play = addButton('Читать', 'play:');
-    ui.pause = addButton('Пауза', 'pause:');
-    ui.stop = addButton('Стоп', 'stop:');
-    ui.reset = addButton('Сброс параметров', 'reset:');
-    ui.status = addLabel('Загрузка голосов…', 13, false);
+    ui.play = addButton(t('Читать'), 'play:');
+    ui.pause = addButton(t('Пауза'), 'pause:');
+    ui.stop = addButton(t('Стоп'), 'stop:');
+    ui.reset = addButton(t('Сброс параметров'), 'reset:');
+    ui.status = addLabel(t('Загрузка голосов…'), 13, false);
     installMenus();
 }
 
@@ -1650,6 +1664,7 @@ function reopen() {
 function idle() { return 30; }
 
 function quit() {
+    if (typeof updateWillQuit === 'function') updateWillQuit();
     closeStartup();
     if (about.player) about.player.pause;
     stopSynth();

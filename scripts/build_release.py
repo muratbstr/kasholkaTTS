@@ -3,6 +3,10 @@ from pathlib import Path
 import hashlib
 import stat
 import zipfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from localization import application_source
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,10 +20,17 @@ def build_release(output_dir=None):
     files = {
         "Install kasholkaTTS.command": ROOT / "installer/Install kasholkaTTS.command",
         "src/kasholkaTTS.js": ROOT / "src/kasholkaTTS.js",
+        "src/update-policy.js": ROOT / "src/update-policy.js",
+        "src/updater.js": ROOT / "src/updater.js",
+        "src/update-install.sh": ROOT / "src/update-install.sh",
         "src/voice-host.js": ROOT / "src/voice-host.js",
         "src/voice-host.swift": ROOT / "src/voice-host.swift",
         "src/voice-host-swift.sh": ROOT / "src/voice-host-swift.sh",
         "README.txt": ROOT / "README.md",
+        "LICENSE": ROOT / "LICENSE",
+        "assets/voicesinstalling_tutor.gif": ROOT / "assets/voicesinstalling_tutor.gif",
+        "docs/UPDATES.md": ROOT / "docs/UPDATES.md",
+        "docs/LOCALIZATION.md": ROOT / "docs/LOCALIZATION.md",
         "CHANGELOG.md": ROOT / "CHANGELOG.md",
         "changelog_before_rel.md": ROOT / "changelog_before_rel.md",
         "VERSION": ROOT / "VERSION",
@@ -34,7 +45,9 @@ def build_release(output_dir=None):
             raise FileNotFoundError(source)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as package:
         for relative, source in files.items():
-            if source.suffix in (".icns", ".mp4", ".png"):
+            if relative == "src/kasholkaTTS.js":
+                content = application_source().encode('utf-8')
+            elif source.suffix in (".icns", ".mp4", ".png", ".gif"):
                 content = source.read_bytes()
             else:
                 content = source.read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8")

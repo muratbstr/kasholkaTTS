@@ -22,7 +22,7 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive) as package:
                 self.assertIsNone(package.testzip())
                 names = package.namelist()
-                self.assertEqual(len(names), 14)
+                self.assertEqual(len(names), 21)
                 self.assertFalse(any(name.startswith("/") or ".." in name.split("/") for name in names))
                 command = next(name for name in names if name.endswith(".command"))
                 info = package.getinfo(command)
@@ -33,7 +33,9 @@ class ReleaseTests(unittest.TestCase):
                 self.assertNotIn(b"\r", body)
                 source = next(name for name in names if name.endswith("/src/kasholkaTTS.js"))
                 self.assertEqual(package.read(source).decode("utf-8"),
-                                 (ROOT / "src/kasholkaTTS.js").read_text(encoding="utf-8"))
+                                 builder.application_source())
+                license_entry = next(name for name in names if name.endswith("/LICENSE"))
+                self.assertEqual(package.read(license_entry), (ROOT / "LICENSE").read_bytes())
                 version = (ROOT / "VERSION").read_text().strip()
                 self.assertIn(f"var VERSION = '{version}';", package.read(source).decode("utf-8"))
                 self.assertRegex(body.decode("utf-8"), r"CFBundleShortVersionString string \d+\.\d+\.\d+\n")
@@ -44,6 +46,12 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(sample_text, (ROOT / 'samples/kasholkaTTS-long-test.txt').read_text(encoding='utf-8'))
                 self.assertGreater(len(sample_text.split()), 2000)
                 self.assertNotIn(b"check-runtime.js", body)
+                for filename in ('update-policy.js', 'updater.js', 'update-install.sh'):
+                    entry = next(name for name in names if name.endswith('/src/' + filename))
+                    self.assertEqual(package.read(entry).decode('utf-8'),
+                                     (ROOT / 'src' / filename).read_text(encoding='utf-8'))
+                self.assertIn(b'# kasholka-update-protocol: 1\n', body)
+                self.assertIn(b'"$update_mode" == 1', body)
                 helper = next(name for name in names if name.endswith("/src/voice-host.js"))
                 self.assertEqual(package.read(helper).decode("utf-8"),
                                  (ROOT / "src/voice-host.js").read_text(encoding="utf-8"))
@@ -54,7 +62,7 @@ class ReleaseTests(unittest.TestCase):
                                      (ROOT / "src" / filename).read_text(encoding="utf-8"))
                     self.assertNotIn(b"\r", package.read(entry))
                     self.assertIn(('"$built_app/Contents/Resources/' + filename + '"').encode(), body)
-                for asset in ("kasholkaTTS.icns", "about.mp4", "loading.png"):
+                for asset in ("kasholkaTTS.icns", "about.mp4", "loading.png", "voicesinstalling_tutor.gif"):
                     entry = next(name for name in names if name.endswith("/assets/" + asset))
                     self.assertEqual(package.read(entry), (ROOT / "assets" / asset).read_bytes())
             self.assertEqual(checksum.read_text().split()[0], hashlib.sha256(archive.read_bytes()).hexdigest())

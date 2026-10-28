@@ -4,6 +4,10 @@ import hashlib
 import re
 import stat
 import zipfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from localization import localization_source
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,7 +26,7 @@ def beta_source():
     # Longer name in About: preserve the existing card and credits.
     source = replace_once(source, "overlay('kasholkaTTS Beta', 110, 48, 38, true)",
                           "overlay('kasholkaTTS Beta', 110, 48, 30, true)")
-    return source + "\n" + (ROOT / "beta/experiments.js").read_text(encoding="utf-8")
+    return source + "\n" + (ROOT / "beta/experiments.js").read_text(encoding="utf-8") + localization_source()
 
 
 def beta_installer():
@@ -35,14 +39,15 @@ def beta_installer():
     body = body.replace("kasholkaTTS-backup.", "kasholkaTTS-Beta-backup.")
     body = body.replace("kasholkaTTS " + version, "kasholkaTTS Beta " + version)
     body = body.replace("завершите kasholkaTTS через", "завершите kasholkaTTS Beta через")
+    body = replace_once(body, "app_display_name='kasholkaTTS'", "app_display_name='kasholkaTTS Beta'")
     body = replace_once(body, "CFBundleName string kasholkaTTS\n", "CFBundleName string 'kasholkaTTS Beta'\n")
     body = replace_once(body, "CFBundleDisplayName string kasholkaTTS\n", "CFBundleDisplayName string 'kasholkaTTS Beta'\n")
     body = re.sub(r"CFBundleShortVersionString string \d+\.\d+\.\d+", "CFBundleShortVersionString string " + version.split()[0], body)
-    body = re.sub(r"CFBundleVersion string \d+", "CFBundleVersion string 19", body)
+    body = re.sub(r"CFBundleVersion string \d+", "CFBundleVersion string 25", body)
     anchor = 'cp "$installer_dir/src/voice-host.js" "$built_app/Contents/Resources/voice-host.js"'
     body = replace_once(body, anchor, anchor + '\ncp "$installer_dir/src/beta-probe.js" "$built_app/Contents/Resources/beta-probe.js"')
-    anchor = "printf '\\nkasholkaTTS Beta " + version
-    body = replace_once(body, anchor, '[[ -f "$installer_dir/src/beta-probe.js" ]] || fail \'Не найден beta-probe.js. Распакуйте весь архив Beta.\'\n\n' + anchor)
+    body = replace_once(body, '# beta-extra-validation',
+                        '[[ -f "$installer_dir/src/beta-probe.js" ]] || fail "$(message missing)"')
     return body
 
 
@@ -57,18 +62,25 @@ def build_beta(output_dir=None):
     }
     for relative, source in {
         "src/beta-probe.js": "beta/probe.js",
+        "src/update-policy.js": "src/update-policy.js",
+        "src/updater.js": "src/updater.js",
+        "src/update-install.sh": "src/update-install.sh",
         "src/voice-host.js": "src/voice-host.js",
         "src/voice-host.swift": "src/voice-host.swift",
         "src/voice-host-swift.sh": "src/voice-host-swift.sh",
         "README.txt": "beta/README.md", "CHANGELOG.md": "beta/CHANGELOG.md",
         "VERSION": "beta/VERSION", "MAC_SMOKE_TEST.txt": "beta/MAC_SMOKE_TEST.md",
         "STABLE_README.txt": "README.md",
+        "LICENSE": "LICENSE",
+        "assets/voicesinstalling_tutor.gif": "assets/voicesinstalling_tutor.gif",
+        "docs/UPDATES.md": "docs/UPDATES.md",
+        "docs/LOCALIZATION.md": "docs/LOCALIZATION.md",
         "samples/kasholkaTTS-long-test.txt": "samples/kasholkaTTS-long-test.txt",
         "assets/kasholkaTTS.icns": "beta/assets/kasholkaTTS.icns",
         "assets/about.mp4": "assets/about.mp4", "assets/loading.png": "assets/loading.png",
     }.items():
         path = ROOT / source
-        files[relative] = path.read_bytes() if path.suffix in (".png", ".icns", ".mp4") else path.read_text(encoding="utf-8").encode("utf-8")
+        files[relative] = path.read_bytes() if path.suffix in (".png", ".icns", ".mp4", ".gif") else path.read_text(encoding="utf-8").encode("utf-8")
     archive = output / (name + ".zip")
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as package:
         for relative, data in files.items():

@@ -4,7 +4,7 @@ var betaReport = { probe: null, say: null };
 
 function betaUnavailable() {
     if (active || voiceProbe || betaJob) {
-        status('Сначала остановите чтение или дождитесь окончания проверки.'); return true;
+        status(t('Сначала остановите чтение или дождитесь окончания проверки.')); return true;
     }
     return false;
 }
@@ -26,24 +26,24 @@ function betaStartJob(mode, text) {
     var permissions = $.NSMutableDictionary.alloc.init;
     permissions.setObjectForKey($(448), $.NSFilePosixPermissions);
     if (!$.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(
-        $(directory), false, permissions, Ref())) throw new Error('Не удалось создать временную папку Beta.');
+        $(directory), false, permissions, Ref())) throw new Error(t('Не удалось создать временную папку Beta.'));
     var job = { mode: mode, directory: directory, deadline: Date.now() + 20000 };
     betaJob = job;
     try {
         job.task = $.NSTask.alloc.init;
         if (mode === 'probe') {
             var script = $.NSBundle.mainBundle.pathForResourceOfType($('beta-probe'), $('js'));
-            if (!script || script.isNil()) throw new Error('Не найден beta-probe.js. Переустановите Beta.');
+            if (!script || script.isNil()) throw new Error(t('Не найден beta-probe.js. Переустановите Beta.'));
             job.task.launchPath = $('/usr/bin/osascript');
             job.task.arguments = $(['-l', 'JavaScript', unwrap(script, ''), directory]);
         } else if (mode === 'say') {
             if (!$(text).writeToFileAtomicallyEncodingError($(directory + '/input.txt'), true, $.NSUTF8StringEncoding, Ref())) {
-                throw new Error('Не удалось подготовить текст для say.');
+                throw new Error(t('Не удалось подготовить текст для say.'));
             }
             job.task.launchPath = $('/usr/bin/say');
             // No -v: let the OS use its configured system voice. No preference writes.
             job.task.arguments = $(['-f', directory + '/input.txt']);
-        } else throw new Error('Неизвестная проверка Beta.');
+        } else throw new Error(t('Неизвестная проверка Beta.'));
         job.task.standardInput = $.NSFileHandle.fileHandleWithNullDevice;
         job.task.standardOutput = $.NSFileHandle.fileHandleWithNullDevice;
         job.errorHandle = createHostLog(directory + '/stderr.txt');
@@ -63,21 +63,21 @@ function betaProbe() {
     betaReport.probe = { state: 'running' };
     try { betaStartJob('probe'); }
     catch (error) { active = false; betaReport.probe = { error: String(error) }; updateControls(); throw error; }
-    status('Beta: проверяю Siri ID из настроек и голоса по языкам, до 20 секунд…');
+    status(t('Beta: проверяю Siri ID из настроек и голоса по языкам, до 20 секунд…'));
 }
 
 function betaSay() {
     if (betaUnavailable()) return;
     var range = ui.editor.selectedRange;
     var text = textToRead(unwrap(ui.editor.string, ''), Number(range.location), Number(range.length));
-    if (!text.trim()) { status('Введите текст или выделите фрагмент для проверки say.'); return; }
+    if (!text.trim()) { status(t('Введите текст или выделите фрагмент для проверки say.')); return; }
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Проверка системного голоса через say');
-    dialog.informativeText = $('Используются голос и темп из «Универсальный доступ → Устный контент».\n' +
-        'На Monterey Siri может заменяться обычным голосом. Успешное чтение не подтверждает Siri.\n' +
-        'Кнопка «Стоп» остановит проверку; пауза и подсветка здесь недоступны.');
-    dialog.addButtonWithTitle($('Прочитать'));
-    dialog.addButtonWithTitle($('Отмена'));
+    dialog.messageText = $(t('Проверка системного голоса через say'));
+    dialog.informativeText = $(t('Используются голос и темп из «Универсальный доступ → Устный контент».\n') +
+        t('На Monterey Siri может заменяться обычным голосом. Успешное чтение не подтверждает Siri.\n') +
+        t('Кнопка «Стоп» остановит проверку; пауза и подсветка здесь недоступны.'));
+    dialog.addButtonWithTitle($(t('Прочитать')));
+    dialog.addButtonWithTitle($(t('Отмена')));
     if (Number(dialog.runModal) !== 1000) return;
     stopSynth();
     active = true; paused = false;
@@ -86,7 +86,7 @@ function betaSay() {
     catch (error) {
         active = false; betaReport.say = { error: String(error) }; updateControls(); throw error;
     }
-    status('Beta: системный say читает. Какой голос звучит, нужно сравнить на слух.');
+    status(t('Beta: системный say читает. Какой голос звучит, нужно сравнить на слух.'));
 }
 
 function betaTick() {
@@ -95,9 +95,9 @@ function betaTick() {
     try {
         if (job.mode === 'probe') {
             var result = readHostJSON(job.directory + '/result.json');
-            if (result && result.state === 'error') throw new Error(result.message);
+            if (result && result.state === 'error') throw new Error(helperError(result.message));
             if (result && result.state === 'voices') {
-                if (!Array.isArray(result.voices)) throw new Error('Некорректный ответ проверки Beta.');
+                if (!Array.isArray(result.voices)) throw new Error(t('Некорректный ответ проверки Beta.'));
                 betaReport.probe = result.report;
                 // The probe resolves exact IDs in osascript, so reading uses
                 // that same host, not the applet's potentially filtered API.
@@ -114,22 +114,22 @@ function betaTick() {
                 active = paused = false;
                 var preferred = unwrap(defaults.stringForKey($('voice')), '');
                 addHostVoices(hostVoices); populateVoices(preferred, false);
-                status(found.length ? 'Beta: доступных Siri ID: ' + found.length + '. Проверьте «Прослушать».' :
-                    'Beta: новые Siri ID недоступны. Попробуйте «Устный контент» в меню Beta.');
+                status(found.length ? t('Beta: доступных Siri ID: ') + found.length + t('. Проверьте «Прослушать».') :
+                    t('Beta: новые Siri ID недоступны. Попробуйте «Устный контент» в меню Beta.'));
                 return;
             }
-            if (Date.now() > job.deadline) throw new Error('Проверка Beta не ответила за 20 секунд.');
+            if (Date.now() > job.deadline) throw new Error(t('Проверка Beta не ответила за 20 секунд.'));
         }
         if (job.task.running) return;
         if (job.mode === 'probe' || Number(job.task.terminationStatus) !== 0) {
             // say can echo an invalid embedded speech command from the input
             // text. Keep its stderr out of the copyable diagnostic report.
-            throw new Error('Проверка завершилась с кодом ' + job.task.terminationStatus + '. ' +
+            throw new Error(t('Проверка завершилась с кодом ') + job.task.terminationStatus + '. ' +
                 (job.mode === 'probe' ? readHostText(job.directory + '/stderr.txt').trim().slice(0, 1000) : ''));
         }
         betaReport.say = { state: 'finished', exitCode: 0, identity: 'System voice; Siri unverified' };
         betaDisposeJob(); active = paused = false; updateControls();
-        status('Beta: say завершил чтение. Это не подтверждает, что прозвучал Siri.');
+        status(t('Beta: say завершил чтение. Это не подтверждает, что прозвучал Siri.'));
     } catch (error) {
         betaReport[job.mode] = { error: String(error) };
         betaDisposeJob(); active = paused = false; updateControls();
@@ -140,36 +140,36 @@ function betaTick() {
 function betaPrepareSelection() {
     if (betaUnavailable()) return;
     var text = unwrap(ui.editor.string, '');
-    if (!text.trim()) { status('Сначала введите текст для системного чтения.'); return; }
+    if (!text.trim()) { status(t('Сначала введите текст для системного чтения.')); return; }
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Siri через «Устный контент»');
-    dialog.informativeText = $('В настройках macOS откройте «Универсальный доступ → Устный контент».\n' +
-        'Выберите голос Siri и включите «Проговаривать выбранный текст».\n\n' +
-        'После «Подготовить текст» нажмите своё системное сочетание (обычно ⌥Esc). ' +
-        'Повторное нажатие остановит речь. Управление и скорость — в системной панели; ' +
-        'кнопка «Стоп» приложения и экспорт к этому чтению не относятся.');
-    dialog.addButtonWithTitle($('Подготовить текст'));
-    dialog.addButtonWithTitle($('Отмена'));
+    dialog.messageText = $(t('Siri через «Устный контент»'));
+    dialog.informativeText = $(t('В настройках macOS откройте «Универсальный доступ → Устный контент».\n') +
+        t('Выберите голос Siri и включите «Проговаривать выбранный текст».\n\n') +
+        t('После «Подготовить текст» нажмите своё системное сочетание (обычно ⌥Esc). ') +
+        t('Повторное нажатие остановит речь. Управление и скорость — в системной панели; ') +
+        t('кнопка «Стоп» приложения и экспорт к этому чтению не относятся.'));
+    dialog.addButtonWithTitle($(t('Подготовить текст')));
+    dialog.addButtonWithTitle($(t('Отмена')));
     if (Number(dialog.runModal) !== 1000) return;
     if (!Number(ui.editor.selectedRange.length)) ui.editor.setSelectedRange($.NSMakeRange(0, text.length));
     ui.window.makeKeyAndOrderFront(null);
     ui.window.makeFirstResponder(ui.editor);
-    status('Нажмите ⌥Esc (или своё сочетание). Остановка — тем же сочетанием или в системной панели.');
+    status(t('Нажмите ⌥Esc (или своё сочетание). Остановка — тем же сочетанием или в системной панели.'));
 }
 
 function betaShowReport() {
     var dialog = $.NSAlert.alloc.init;
-    dialog.messageText = $('Результаты экспериментов Beta');
-    dialog.informativeText = $('Отчёт содержит версии, голосовые ID, результаты проверок и ошибки. Текста редактора в отчёте нет.\n' +
-        'Найденный ID не гарантирует воспроизведение голосом Siri; сравните звук с системной пробой.');
-    dialog.addButtonWithTitle($('Скопировать отчёт'));
-    dialog.addButtonWithTitle($('Закрыть'));
+    dialog.messageText = $(t('Результаты экспериментов Beta'));
+    dialog.informativeText = $(t('Отчёт содержит версии, голосовые ID, результаты проверок и ошибки. Текста редактора в отчёте нет.\n') +
+        t('Найденный ID не гарантирует воспроизведение голосом Siri; сравните звук с системной пробой.'));
+    dialog.addButtonWithTitle($(t('Скопировать отчёт')));
+    dialog.addButtonWithTitle($(t('Закрыть')));
     if (Number(dialog.runModal) === 1000) {
         var pasteboard = $.NSPasteboard.generalPasteboard;
         pasteboard.clearContents;
         pasteboard.setStringForType($(JSON.stringify({ app: 'kasholkaTTS Beta', version: VERSION,
             os: unwrap($.NSProcessInfo.processInfo.operatingSystemVersionString, ''), experiments: betaReport }, null, 2)), $.NSPasteboardTypeString);
-        status('Отчёт Beta скопирован.');
+        status(t('Отчёт Beta скопирован.'));
     }
 }
 
@@ -212,13 +212,13 @@ installMenus = function () {
     betaController = $.KasholkaBetaController.alloc.init;
     var menu = $.NSMenu.alloc.initWithTitle($('Beta'));
     menu.autoenablesItems = false;
-    [['Проверить Siri ID из настроек', 'betaProbe:'], ['Прочитать системным say…', 'betaSay:'],
-        ['Siri через «Устный контент»…', 'betaSelection:']].forEach(function (entry) {
+    [[t('Проверить Siri ID из настроек'), 'betaProbe:'], [t('Прочитать системным say…'), 'betaSay:'],
+        [t('Siri через «Устный контент»…'), 'betaSelection:']].forEach(function (entry) {
         var item = menu.addItemWithTitleActionKeyEquivalent($(entry[0]), entry[1], $(''));
         item.target = betaController; betaMenuItems.push(item);
     });
     menu.addItem($.NSMenuItem.separatorItem);
-    var report = menu.addItemWithTitleActionKeyEquivalent($('Отчёт экспериментов…'), 'betaReport:', $(''));
+    var report = menu.addItemWithTitleActionKeyEquivalent($(t('Отчёт экспериментов…')), 'betaReport:', $(''));
     report.target = betaController;
     var item = $.NSMenuItem.alloc.init;
     item.title = $('Beta'); item.submenu = menu;
