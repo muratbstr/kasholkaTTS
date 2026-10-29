@@ -6,7 +6,7 @@ set -Eeuo pipefail
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 app_display_name='kasholkaTTS'
-release_name='1.7.4 Release 2.2'
+release_name='1.7.8 Release 3'
 installer_language=en
 log_file=''
 update_mode=0
@@ -202,12 +202,14 @@ set_plist CFBundleIdentifier string com.kasholka.tts
 set_plist CFBundleName string kasholkaTTS
 set_plist CFBundleDisplayName string kasholkaTTS
 set_plist CFBundleIconFile string kasholkaTTS.icns
-set_plist CFBundleShortVersionString string 1.7.4
-set_plist CFBundleVersion string 29
-set_plist KasholkaReleaseName string '1.7.4 Release 2.2'
+set_plist CFBundleShortVersionString string 1.7.8
+set_plist CFBundleVersion string 35
+set_plist KasholkaReleaseName string '1.7.8 Release 3'
 set_plist LSMinimumSystemVersion string 12.0
 set_plist NSHighResolutionCapable bool true
-set_plist NSHumanReadableCopyright string 'kasholkaTTS 1.7.4 Release 2.2'
+# osacompile applets may otherwise inherit a light-only appearance.
+set_plist NSRequiresAquaSystemAppearance bool false
+set_plist NSHumanReadableCopyright string 'kasholkaTTS 1.7.8 Release 3'
 stage 4 verify
 /usr/bin/plutil -lint "$plist"
 

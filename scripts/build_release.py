@@ -32,7 +32,6 @@ def build_release(output_dir=None, *, manual=False):
         "assets/voicesinstalling_tutor.gif": ROOT / "assets/voicesinstalling_tutor.gif",
         "docs/UPDATES.md": ROOT / "docs/UPDATES.md",
         "docs/LOCALIZATION.md": ROOT / "docs/LOCALIZATION.md",
-        "docs/DOWNLOAD_COUNTER.md": ROOT / "docs/DOWNLOAD_COUNTER.md",
         "CHANGELOG.md": ROOT / "CHANGELOG.md",
         "changelog_before_rel.md": ROOT / "changelog_before_rel.md",
         "VERSION": ROOT / "VERSION",

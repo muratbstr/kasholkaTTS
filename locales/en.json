@@ -344,6 +344,9 @@
     "Япония": "Japan",
     "Японский": "Japanese",
     "кнопка «Стоп» приложения и экспорт к этому чтению не относятся.": "the app's Stop button and audio export do not control this reading.",
-    "… «Стоп» отменяет сохранение.": "… Click Stop to cancel the export."
+    "… «Стоп» отменяет сохранение.": "… Click Stop to cancel the export.",
+    "Тема": "Theme",
+    "Светлая": "Light",
+    "Тёмная": "Dark"
   }
 }

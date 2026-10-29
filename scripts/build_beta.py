@@ -76,7 +76,6 @@ def build_beta(output_dir=None, *, manual=False):
         "assets/voicesinstalling_tutor.gif": "assets/voicesinstalling_tutor.gif",
         "docs/UPDATES.md": "docs/UPDATES.md",
         "docs/LOCALIZATION.md": "docs/LOCALIZATION.md",
-        "docs/DOWNLOAD_COUNTER.md": "docs/DOWNLOAD_COUNTER.md",
         "samples/kasholkaTTS-long-test.txt": "samples/kasholkaTTS-long-test.txt",
         "assets/kasholkaTTS.icns": "beta/assets/kasholkaTTS.icns",
         "assets/about.mp4": "assets/about.mp4", "assets/loading.png": "assets/loading.png",

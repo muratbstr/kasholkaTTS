@@ -5,7 +5,8 @@ var ObjC = {
     unwrap: function (value) { return value; },
     registerSubclass: function (definition) { registered = definition; }
 };
-var $ = function (value) { return value; };
+var bridgedNil = { isNil: function () { return true; } };
+var $ = function (value) { return arguments.length === 0 ? bridgedNil : value; };
 var Ref = function () { return []; };
 $.NSSpeechPitchBaseProperty = 'pitch';
 $.NSSpeechImmediateBoundary = 0;

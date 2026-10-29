@@ -22,7 +22,7 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive) as package:
                 self.assertIsNone(package.testzip())
                 names = package.namelist()
-                self.assertEqual(len(names), 22)
+                self.assertEqual(len(names), 21)
                 self.assertFalse(any(name.startswith("/") or ".." in name.split("/") for name in names))
                 command = next(name for name in names if name.endswith(".command"))
                 info = package.getinfo(command)
@@ -45,6 +45,7 @@ class ReleaseTests(unittest.TestCase):
                 sample_text = package.read(sample).decode('utf-8')
                 self.assertEqual(sample_text, (ROOT / 'samples/kasholkaTTS-long-test.txt').read_text(encoding='utf-8'))
                 self.assertGreater(len(sample_text.split()), 2000)
+                self.assertIn(b"set_plist NSRequiresAquaSystemAppearance bool false", body)
                 self.assertNotIn(b"check-runtime.js", body)
                 for filename in ('update-policy.js', 'updater.js', 'update-install.sh'):
                     entry = next(name for name in names if name.endswith('/src/' + filename))

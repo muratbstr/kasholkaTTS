@@ -1,11 +1,11 @@
-/* kasholkaTTS 1.7.4 Release 2.2 — macOS 12+, JavaScript for Automation / AppKit.
+/* kasholkaTTS 1.7.8 Release 3 — macOS 12+, JavaScript for Automation / AppKit.
  * Compiled as a stay-open applet by the installer using macOS osacompile.
  * Speech stays local. Optional update checks contact GitHub only.
  */
 ObjC.import('Cocoa');
 ObjC.import('AVFoundation');
 
-var VERSION = '1.7.4 Release 2.2';
+var VERSION = '1.7.8 Release 3';
 var ui = {};
 var controller = null;
 var synth = null;
@@ -17,6 +17,8 @@ var defaults = null;
 var engine = 'ns';
 var currentUtterance = null;
 var scale = 1;
+var themePreference = 'system';
+var themeOptions = ['system', 'light', 'dark'];
 var about = {};
 var avFoundationBundle = null;
 var voiceProbe = null;
@@ -1155,6 +1157,9 @@ function registerController() {
             'exportAudio:': { types: ['void', ['id']], implementation: guarded(exportAudio) },
             'exportTick:': { types: ['void', ['id']], implementation: exportTick },
             'autoScroll:': { types: ['void', ['id']], implementation: guarded(toggleAutoScroll) },
+            'theme:': { types: ['void', ['id']], implementation: function (sender) {
+                guarded(function () { chooseTheme(themeOptions[Number(sender.tag)]); })();
+            } },
             'about:': { types: ['void', ['id']], implementation: guarded(showAbout) },
             'hostTick:': { types: ['void', ['id']], implementation: hostTick },
             'voiceDiagnostics:': { types: ['void', ['id']], implementation: guarded(showVoiceDiagnostics) },
@@ -1445,6 +1450,50 @@ function showAbout() {
     startAboutVideo();
 }
 
+// AppKit owns appearance propagation and resolves semantic NSColors on redraw.
+// A nil application appearance follows system changes without restarting speech.
+function applyTheme(preference) {
+    if (themeOptions.indexOf(preference) < 0) preference = 'system';
+    // JS null bridges to NSNull, not the nil pointer required by AppKit.
+    var appearance = $();
+    if (preference !== 'system') {
+        appearance = $.NSAppearance.appearanceNamed(preference === 'dark' ?
+            $.NSAppearanceNameDarkAqua : $.NSAppearanceNameAqua);
+    }
+    $.NSApplication.sharedApplication.appearance = appearance;
+    themePreference = preference;
+    (ui.themeItems || []).forEach(function (item, index) {
+        item.state = themeOptions[index] === preference ? 1 : 0;
+    });
+}
+
+function initTheme() {
+    applyTheme(unwrap(defaults.objectForKey($('uiTheme')), 'system'));
+}
+
+function chooseTheme(preference) {
+    if (themeOptions.indexOf(preference) < 0) return;
+    applyTheme(preference);
+    defaults.setObjectForKey($(preference), $('uiTheme'));
+}
+
+function installThemeMenu(viewMenu) {
+    var menu = $.NSMenu.alloc.initWithTitle($(t('Тема')));
+    menu.autoenablesItems = false;
+    ui.themeItems = [];
+    [t('Как в macOS'), t('Светлая'), t('Тёмная')].forEach(function (title, index) {
+        var item = menu.addItemWithTitleActionKeyEquivalent($(title), 'theme:', $(''));
+        item.target = controller;
+        item.tag = index;
+        item.state = themeOptions[index] === themePreference ? 1 : 0;
+        ui.themeItems.push(item);
+    });
+    var parent = $.NSMenuItem.alloc.init;
+    parent.title = $(t('Тема'));
+    parent.submenu = menu;
+    viewMenu.addItem(parent);
+}
+
 function installMenus() {
     var menu = $.NSMenu.alloc.init;
     var appItem = $.NSMenuItem.alloc.init;
@@ -1478,6 +1527,8 @@ function installMenus() {
     menu.addItem(editItem);
     var viewItem = $.NSMenuItem.alloc.init;
     var viewMenu = $.NSMenu.alloc.initWithTitle($(t('Вид')));
+    installThemeMenu(viewMenu);
+    viewMenu.addItem($.NSMenuItem.separatorItem);
     ui.autoScrollItem = viewMenu.addItemWithTitleActionKeyEquivalent($(t('Автопрокрутка при чтении')), 'autoScroll:', $(''));
     ui.autoScrollItem.target = controller;
     ui.autoScrollItem.state = autoScroll ? 1 : 0;
@@ -1588,7 +1639,10 @@ function run() {
     registerController();
     var app = $.NSApplication.sharedApplication;
     app.setActivationPolicy($.NSApplicationActivationPolicyRegular);
-    try { showStartup(); }
+    try {
+        initTheme();
+        showStartup();
+    }
     catch (error) {
         closeStartup();
         alertUser(t('Не удалось запустить kasholkaTTS'), String(error));
@@ -1604,6 +1658,7 @@ function buildMainWindow() {
     ui.window = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer(
         $.NSMakeRect(0, 0, 760, 500), style, $.NSBackingStoreBuffered, false);
     ui.window.title = $('kasholkaTTS');
+    ui.window.backgroundColor = $.NSColor.windowBackgroundColor;
     ui.window.contentMinSize = $.NSMakeSize(680, 400);
     ui.window.releasedWhenClosed = false;
     ui.window.delegate = controller;
@@ -1628,6 +1683,7 @@ function buildMainWindow() {
     var scroll = $.NSScrollView.alloc.initWithFrame($.NSMakeRect(16, 92, 728, 280));
     ui.scroll = scroll;
     scroll.borderType = $.NSBezelBorder;
+    scroll.backgroundColor = $.NSColor.textBackgroundColor;
     scroll.hasVerticalScroller = true;
     scroll.hasHorizontalScroller = false;
     scroll.autohidesScrollers = false;
@@ -1637,6 +1693,8 @@ function buildMainWindow() {
     ui.editor.font = $.NSFont.systemFontOfSize(18);
     ui.editor.textColor = $.NSColor.textColor;
     ui.editor.backgroundColor = $.NSColor.textBackgroundColor;
+    ui.editor.insertionPointColor = $.NSColor.textColor;
+    ui.editor.usesAdaptiveColorMappingForDarkAppearance = true;
     ui.editor.textContainerInset = $.NSMakeSize(16, 16);
     ui.editor.verticallyResizable = true;
     ui.editor.horizontallyResizable = false;
