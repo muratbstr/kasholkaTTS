@@ -8,13 +8,13 @@
 **Счётчик учитывает скачивания архивов для ручной установки `*-macOS-manual-installer.zip`.**
 
 - **Основная версия — 1.7.8 Release 3:** зелёная иконка.
-- **[kasholkaTTS Beta — 1.7.5 Beta 1](beta/README.md):** синяя иконка, дополнительные
+- **[kasholkaTTS Beta — 1.8.4 Beta 2](beta/README.md):** синяя иконка, дополнительные
   эксперименты с Siri. Устанавливается рядом и хранит настройки отдельно.
 
 История изменений: [CHANGELOG.md](CHANGELOG.md).
 
 Скачать: **[1.7.8 Release 3](https://github.com/muratbstr/kasholkaTTS/releases/tag/v1.7.8)**
-или **[1.7.5 Beta 1](https://github.com/muratbstr/kasholkaTTS/releases/tag/v1.7.5-beta.1)**.
+или **[1.8.4 Beta 2](https://github.com/muratbstr/kasholkaTTS/releases/download/v1.8.4-beta.2/kasholkaTTS-Beta-1.8.4-Beta-2-macOS-manual-installer.zip)**.
 
 ## Установка и обновление
 

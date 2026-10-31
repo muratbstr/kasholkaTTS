@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-UI_SOURCES = ['src/kasholkaTTS.js', 'src/updater.js', 'src/update-policy.js', 'beta/experiments.js', 'src/localization.js']
+UI_SOURCES = ['src/kasholkaTTS.js', 'src/updater.js', 'src/update-policy.js', 'beta/experiments.js', 'beta/design.js', 'beta/export.js', 'beta/update-design.js', 'beta/pitch-design.js', 'beta/tools-design.js', 'beta/shortcuts.js', 'src/localization.js']
 HELPER_SOURCES = ['src/voice-host.js', 'src/voice-host.swift', 'src/voice-host-swift.sh', 'beta/probe.js']
 PREVIEW_RU = 'Привет! Так звучит мой голос. Один, два, три. Приятного прослушивания!'
 TOKENS = re.compile(r'''//[^\n]*|/\*[\s\S]*?\*/|'(?:\\.|[^'\\\r\n])*'|"(?:\\.|[^"\\\r\n])*"''')

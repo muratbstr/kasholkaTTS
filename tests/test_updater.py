@@ -61,8 +61,7 @@ return 'ok';
         with tempfile.TemporaryDirectory(dir=output) as temporary:
             for beta in (False, True):
                 main = builder.beta_source() if beta else (ROOT / 'src/kasholkaTTS.js').read_text(encoding='utf-8') + builder.localization_source()
-                source = main + '\n' + '\n'.join((ROOT / 'src' / name).read_text(encoding='utf-8')
-                                                for name in ['update-policy.js', 'updater.js'])
+                source = main + '\n' + (ROOT / 'src/update-policy.js').read_text(encoding='utf-8') + '\n' + (builder.beta_updater_source() if beta else (ROOT / 'src/updater.js').read_text(encoding='utf-8'))
                 path = Path(temporary) / ('beta.js' if beta else 'stable.js')
                 path.write_text(source, encoding='utf-8')
                 result = subprocess.run(['/usr/bin/osacompile', '-l', 'JavaScript', '-s', '-o',

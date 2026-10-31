@@ -18,15 +18,66 @@ def replace_once(text, old, new):
     return text.replace(old, new, 1)
 
 
+def beta_export_engine(source):
+    """Reuse stable synthesis and atomic publication without its two modal pickers.
+
+    Fail the build if integration points change; never silently fork the engine.
+    """
+    block = source.split("function exportAudio() {", 1)[1].split("\nfunction selectedPitchOffset()", 1)[0]
+    preflight = block.split("    var choice = chooseAudioExport();", 1)[0]
+    start = "    selectVoice();\n    if (!synth) return;\n    var destination ="
+    if block.count(start) != 1 or block.count('panel.URL') != 2:
+        raise ValueError('Export engine integration changed')
+    body = block[block.index(start):].replace('panel.URL', 'destinationURL')
+    return ('\nfunction betaStartAudioExport(choice, destinationURL) {' + preflight +
+            "    var sourceExtension = engine === 'ns' ? 'aiff' : 'caf';\n" + body)
+
+
 def beta_source():
     stable_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     version = (ROOT / "beta/VERSION").read_text(encoding="utf-8").strip()
     source = (ROOT / "src/kasholkaTTS.js").read_text(encoding="utf-8")
     source = source.replace(stable_version, version).replace("kasholkaTTS", "kasholkaTTS Beta")
+    # Ignore old speech-engine completions while a Beta experiment owns playback.
+    source = replace_once(source,
+        "if (!synth || !sender.isEqual(synth) || !active) return;",
+        "if (betaJob || !synth || !sender.isEqual(synth) || !active) return;")
+    source = replace_once(source,
+        "if (!synth || !sender.isEqual(synth) || !active || !currentUtterance ||",
+        "if (betaJob || !synth || !sender.isEqual(synth) || !active || !currentUtterance ||")
+    # About presentation restored; the panel is now drawn by a dedicated NSView.
+    start = source.index('function aboutCard(parent, frame) {')
+    end = source.index('function showAbout()', start)
+    source = source[:start] + 'function aboutCard(parent, frame) { return betaCreateAboutPanel(parent, frame); }\n\n' + source[end:]
+    source = replace_once(source,
+        '        darkPanel(window.contentView, $.NSMakeRect(versionFrame[0], versionFrame[1], versionFrame[2], versionFrame[3]), 0.4, 14);\n', '')
+
     # Longer name in About: preserve the existing card and credits.
     source = replace_once(source, "overlay('kasholkaTTS Beta', 110, 48, 38, true)",
                           "overlay('kasholkaTTS Beta', 110, 48, 30, true)")
-    return source + "\n" + (ROOT / "beta/experiments.js").read_text(encoding="utf-8") + localization_source()
+    source = replace_once(source,
+                          "addSubviewPositionedRelativeTo(background, $.NSWindowBelow, null)",
+                          "addSubviewPositionedRelativeTo(background, $.NSWindowBelow, $())")
+    source = replace_once(source,
+                          "label.textColor = $.NSColor.whiteColor;\n            window.contentView.addSubview(label);",
+                          "label.textColor = $.NSColor.whiteColor;\n"
+                          "            label.wantsLayer = true;\n"
+                          "            label.layer.shadowColor = $.NSColor.blackColor.CGColor;\n"
+                          "            label.layer.shadowOpacity = 0.7;\n"
+                          "            label.layer.shadowRadius = 2;\n"
+                          "            label.layer.shadowOffset = $.NSMakeSize(0, -1);\n"
+                          "            window.contentView.addSubview(label);")
+    return source + beta_export_engine(source) + "\n" + (ROOT / "beta/experiments.js").read_text(encoding="utf-8") + localization_source() + "\n" + (ROOT / "beta/design.js").read_text(encoding="utf-8") + "\n" + (ROOT / "beta/export.js").read_text(encoding="utf-8") + "\n" + (ROOT / "beta/pitch-design.js").read_text(encoding="utf-8") + "\n" + (ROOT / "beta/tools-design.js").read_text(encoding="utf-8") + "\n" + (ROOT / "beta/shortcuts.js").read_text(encoding="utf-8")
+
+
+def beta_updater_source():
+    source = (ROOT / 'src/updater.js').read_text(encoding='utf-8')
+    # Results are displayed in the new window; avoid duplicate NSAlert dialogs.
+    source = replace_once(source,
+        "    if (error && job && job.manual) alertUser(t('Обновление не установлено'), message);", '')
+    source = replace_once(source,
+        "            if (manual) alertUser(t('Обновлений нет'), t('Установлена ') + VERSION + t('. Новых опубликованных сборок для этого канала нет.'));", '')
+    return source + '\n' + (ROOT / 'beta/update-design.js').read_text(encoding='utf-8')
 
 
 def beta_installer():
@@ -43,7 +94,7 @@ def beta_installer():
     body = replace_once(body, "CFBundleName string kasholkaTTS\n", "CFBundleName string 'kasholkaTTS Beta'\n")
     body = replace_once(body, "CFBundleDisplayName string kasholkaTTS\n", "CFBundleDisplayName string 'kasholkaTTS Beta'\n")
     body = re.sub(r"CFBundleShortVersionString string \d+\.\d+\.\d+", "CFBundleShortVersionString string " + version.split()[0], body)
-    body = re.sub(r"CFBundleVersion string \d+", "CFBundleVersion string 30", body)
+    body = re.sub(r"CFBundleVersion string \d+", "CFBundleVersion string 60", body)
     anchor = 'cp "$installer_dir/src/voice-host.js" "$built_app/Contents/Resources/voice-host.js"'
     body = replace_once(body, anchor, anchor + '\ncp "$installer_dir/src/beta-probe.js" "$built_app/Contents/Resources/beta-probe.js"')
     body = replace_once(body, '# beta-extra-validation',
@@ -60,11 +111,11 @@ def build_beta(output_dir=None, *, manual=False):
     files = {
         "Install kasholkaTTS Beta.command": beta_installer().encode("utf-8"),
         "src/kasholkaTTS.js": beta_source().encode("utf-8"),
+        "src/updater.js": beta_updater_source().encode("utf-8"),
     }
     for relative, source in {
         "src/beta-probe.js": "beta/probe.js",
         "src/update-policy.js": "src/update-policy.js",
-        "src/updater.js": "src/updater.js",
         "src/update-install.sh": "src/update-install.sh",
         "src/voice-host.js": "src/voice-host.js",
         "src/voice-host.swift": "src/voice-host.swift",
@@ -72,6 +123,8 @@ def build_beta(output_dir=None, *, manual=False):
         "README.txt": "beta/README.md", "CHANGELOG.md": "beta/CHANGELOG.md",
         "VERSION": "beta/VERSION", "MAC_SMOKE_TEST.txt": "beta/MAC_SMOKE_TEST.md",
         "STABLE_README.txt": "README.md",
+        "DESIGN_PLAN.md": "beta/DESIGN_PLAN.md",
+        "SHORTCUTS.md": "beta/SHORTCUTS.md",
         "LICENSE": "LICENSE",
         "assets/voicesinstalling_tutor.gif": "assets/voicesinstalling_tutor.gif",
         "docs/UPDATES.md": "docs/UPDATES.md",

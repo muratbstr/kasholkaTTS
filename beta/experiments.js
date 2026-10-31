@@ -15,13 +15,14 @@ function betaDisposeJob() {
     if (job.timer) job.timer.invalidate;
     try { if (job.task && job.task.running) job.task.terminate; } catch (exited) {}
     if (job.errorHandle) { try { job.errorHandle.closeFile; } catch (closed) {} }
-    ['input.txt', 'result.json', 'stderr.txt'].forEach(function (name) {
+    if (job.outputHandle) { try { job.outputHandle.closeFile; } catch (closed) {} }
+    ['input.txt', 'result.json', 'stderr.txt', 'shortcuts.txt'].forEach(function (name) {
         try { $.NSFileManager.defaultManager.removeItemAtPathError($(job.directory + '/' + name), Ref()); } catch (missing) {}
     });
     try { $.rmdir(job.directory); } catch (missing) {}
 }
 
-function betaStartJob(mode, text) {
+function betaStartJob(mode, text, shortcut) {
     var directory = unwrap($.NSTemporaryDirectory(), '') + 'kasholkaTTS-Beta-' + unwrap($.NSUUID.UUID.UUIDString, '');
     var permissions = $.NSMutableDictionary.alloc.init;
     permissions.setObjectForKey($(448), $.NSFilePosixPermissions);
@@ -43,14 +44,28 @@ function betaStartJob(mode, text) {
             job.task.launchPath = $('/usr/bin/say');
             // No -v: let the OS use its configured system voice. No preference writes.
             job.task.arguments = $(['-f', directory + '/input.txt']);
+        } else if (mode === 'shortcuts-list' || mode === 'shortcuts-run') {
+            job.task.launchPath = $('/usr/bin/shortcuts');
+            if (mode === 'shortcuts-list') {
+                job.outputHandle = createHostLog(directory + '/shortcuts.txt');
+                job.task.arguments = $(['list']);
+            } else {
+                if (typeof shortcut !== 'string' || !shortcut || /^-/.test(shortcut) || /[\x00-\x1f]/.test(shortcut)) {
+                    throw new Error(t('Некорректное имя команды.'));
+                }
+                if (!$(text).writeToFileAtomicallyEncodingError($(directory + '/input.txt'), true, $.NSUTF8StringEncoding, Ref())) {
+                    throw new Error(t('Не удалось подготовить текст для команды.'));
+                }
+                job.task.arguments = $(['run', shortcut, '--input-path', directory + '/input.txt']);
+            }
         } else throw new Error(t('Неизвестная проверка Beta.'));
         job.task.standardInput = $.NSFileHandle.fileHandleWithNullDevice;
-        job.task.standardOutput = $.NSFileHandle.fileHandleWithNullDevice;
+        job.task.standardOutput = job.outputHandle || $.NSFileHandle.fileHandleWithNullDevice;
         job.errorHandle = createHostLog(directory + '/stderr.txt');
         job.task.standardError = job.errorHandle;
         job.task.launch;
         job.timer = $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(
-            0.2, betaController, 'betaTick:', null, true);
+            0.2, betaController, 'betaTick:', $(), true);
         $.NSRunLoop.mainRunLoop.addTimerForMode(job.timer, $.NSRunLoopCommonModes);
         updateControls();
     } catch (error) { betaDisposeJob(); throw error; }
@@ -79,6 +94,12 @@ function betaSay() {
     dialog.addButtonWithTitle($(t('Прочитать')));
     dialog.addButtonWithTitle($(t('Отмена')));
     if (Number(dialog.runModal) !== 1000) return;
+    betaSayStart(text);
+}
+
+function betaSayStart(text) {
+    if (betaUnavailable() || audioExport) return;
+    if (!text.trim()) { status(t('Введите текст или выделите фрагмент для проверки say.')); return; }
     stopSynth();
     active = true; paused = false;
     betaReport.say = { state: 'running', identity: 'System voice; Siri unverified' };
@@ -151,8 +172,15 @@ function betaPrepareSelection() {
     dialog.addButtonWithTitle($(t('Подготовить текст')));
     dialog.addButtonWithTitle($(t('Отмена')));
     if (Number(dialog.runModal) !== 1000) return;
+    betaPrepareSelectionNow();
+}
+
+function betaPrepareSelectionNow() {
+    if (betaUnavailable() || audioExport) return;
+    var text = unwrap(ui.editor.string, '');
+    if (!text.trim()) { status(t('Сначала введите текст для системного чтения.')); return; }
     if (!Number(ui.editor.selectedRange.length)) ui.editor.setSelectedRange($.NSMakeRange(0, text.length));
-    ui.window.makeKeyAndOrderFront(null);
+    ui.window.makeKeyAndOrderFront($());
     ui.window.makeFirstResponder(ui.editor);
     status(t('Нажмите ⌥Esc (или своё сочетание). Остановка — тем же сочетанием или в системной панели.'));
 }
@@ -203,9 +231,10 @@ var betaOriginalInstallMenus = installMenus;
 installMenus = function () {
     betaOriginalInstallMenus();
     ObjC.registerSubclass({ name: 'KasholkaBetaController', superclass: 'NSObject', methods: {
-        'betaProbe:': { types: ['void', ['id']], implementation: guarded(betaProbe) },
-        'betaSay:': { types: ['void', ['id']], implementation: guarded(betaSay) },
-        'betaSelection:': { types: ['void', ['id']], implementation: guarded(betaPrepareSelection) },
+        'betaProbe:': { types: ['void', ['id']], implementation: guarded(function () { betaSiriShow(1); }) },
+        'betaSay:': { types: ['void', ['id']], implementation: guarded(function () { betaSiriShow(2); }) },
+        'betaSelection:': { types: ['void', ['id']], implementation: guarded(function () { betaSiriShow(3); }) },
+        'betaShortcuts:': { types: ['void', ['id']], implementation: guarded(betaShortcutShow) },
         'betaReport:': { types: ['void', ['id']], implementation: guarded(betaShowReport) },
         'betaTick:': { types: ['void', ['id']], implementation: betaTick }
     } });
@@ -213,7 +242,7 @@ installMenus = function () {
     var menu = $.NSMenu.alloc.initWithTitle($('Beta'));
     menu.autoenablesItems = false;
     [[t('Проверить Siri ID из настроек'), 'betaProbe:'], [t('Прочитать системным say…'), 'betaSay:'],
-        [t('Siri через «Устный контент»…'), 'betaSelection:']].forEach(function (entry) {
+        [t('Siri через «Устный контент»…'), 'betaSelection:'], [t('Siri через «Команды»…'), 'betaShortcuts:']].forEach(function (entry) {
         var item = menu.addItemWithTitleActionKeyEquivalent($(entry[0]), entry[1], $(''));
         item.target = betaController; betaMenuItems.push(item);
     });

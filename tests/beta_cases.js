@@ -18,10 +18,10 @@ function betaFixture() {
     };
     var originalDollar = $;
     $ = function (value) {
-        if (value === fixture.text) return { writeToFileAtomicallyEncodingError: function (path) {
+        if (arguments.length && typeof value === 'string' && value === fixture.text) return { writeToFileAtomicallyEncodingError: function (path) {
             fixture.files[path] = value; return !fixture.writeFails;
         } };
-        return originalDollar(value);
+        return originalDollar.apply(null, arguments);
     };
     Object.keys(originalDollar).forEach(function (key) { $[key] = originalDollar[key]; });
     fixture.restore = function () { $ = originalDollar; };
