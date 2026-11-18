@@ -174,7 +174,7 @@ Mac-проверки на Windows пропускаются.
 - [beforerel](beforerel) — старые версии
 
 ## Авторы
-- **Код, помощь с дизайном:**  GPT-6 Astra (VS Code + Codex)
+- **Код, помощь с дизайном:**  GPT-6 Astra (и не только...) (VS Code + Codex)
 - **Идея, промпт, дизайн:** strch
 
 ## Лицензия/License
